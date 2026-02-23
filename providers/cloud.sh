@@ -175,17 +175,15 @@ cmd_push() {
 
   # Fetch per-profile sync exclusions from server (best-effort, never blocks push)
   local excluded_paths=()
-  local excluded_count=0
+  local profile_encoded
+  profile_encoded=$(python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$(get_profile_name)" 2>/dev/null || get_profile_name)
   local rule
   while IFS= read -r rule; do
-    if [[ -n "$rule" ]]; then
-      excluded_paths+=("$rule")
-      excluded_count=$((excluded_count + 1))
-    fi
-  done < <(fetch_sync_rules "$vault_id" "$(get_profile_name)" 2>/dev/null || true)
+    [[ -n "$rule" ]] && excluded_paths+=("$rule")
+  done < <(fetch_sync_rules "$vault_id" "$profile_encoded" 2>/dev/null || true)
 
-  if [[ "$excluded_count" -gt 0 ]]; then
-    log "Applying $excluded_count sync exclusion(s)..."
+  if [[ ${#excluded_paths[@]} -gt 0 ]]; then
+    log "Applying ${#excluded_paths[@]} sync exclusion(s)..."
   fi
 
   # Stage files for upload (exclude local-only files + user exclusions)
@@ -199,11 +197,9 @@ cmd_push() {
     '--exclude' '.heartbeat.pid'
     '--exclude' '.git-local/'
   )
-  if [[ "$excluded_count" -gt 0 ]]; then
-    for rule in "${excluded_paths[@]}"; do
-      rsync_excludes+=('--exclude' "$rule")
-    done
-  fi
+  for rule in "${excluded_paths[@]}"; do
+    rsync_excludes+=('--exclude' "$rule")
+  done
   rsync -a --delete "${rsync_excludes[@]}" "$VAULT_DIR/" "$sync_dir/"
 
   # Create archive
