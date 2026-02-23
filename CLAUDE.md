@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ClawRoam is an OpenClaw skill that syncs an agent's knowledge, memory, and system packages across machines — like iCloud, but for AI agents. The core is pure Bash (no build step); the cloud backend is TypeScript.
 
-The skill is published on ClawHub as `getlighty-clawroam`. The managed backend runs on Cloudflare Workers at `clawroam-api.ovisoftblue.workers.dev`.
+The skill is published on ClawHub as `clawroam`. The managed backend runs on Cloudflare Workers at `clawroam-api.ovisoftblue.workers.dev`.
 
 ## Commands
 
@@ -44,9 +44,8 @@ wrangler deploy    # deploy to Cloudflare Workers
 
 ### Publishing to ClawHub
 ```bash
-clawhub publish . --slug getlighty-clawroam --name "ClawRoam" --version "X.Y.Z"
+clawhub publish . --slug clawroam --name "ClawRoam" --version "X.Y.Z"
 ```
-Note: slugs `clawroam` and `clawvault` are taken by other users on ClawHub.
 
 ## Architecture
 
