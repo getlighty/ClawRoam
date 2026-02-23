@@ -17,6 +17,13 @@ log() { echo "[clawvault:cloud $(timestamp)] $*"; }
 # Use --http1.1 to avoid HTTP/2 protocol errors on some systems
 CURL="curl --http1.1"
 
+get_profile_name() {
+  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  local name
+  name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+  echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
+}
+
 get_public_key() {
   cat "$KEY_DIR/clawvault_ed25519.pub" 2>/dev/null
 }
@@ -162,18 +169,21 @@ cmd_push() {
   local size_mb
   size_mb=$(echo "scale=2; $size_bytes / 1048576" | bc 2>/dev/null || echo "?")
 
-  log "Pushing to ClawVault Cloud ($size_mb MB)..."
+  local profile_name
+  profile_name=$(get_profile_name)
+  log "Pushing to ClawVault Cloud ($size_mb MB, profile: $profile_name)..."
 
   # Sign the archive hash for authentication
   local archive_hash
-  archive_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
+  archive_hash=$(shasum -a 256 "$archive" 2>/dev/null || sha256sum "$archive" | awk '{print $1}')
+  archive_hash=$(echo "$archive_hash" | awk '{print $1}')
   local signature
   signature=$(sign_request "$archive_hash" 2>/dev/null || echo "unsigned")
 
   # Upload
   local http_code
   http_code=$($CURL -sf -o /dev/null -w "%{http_code}" \
-    -X PUT "$API_BASE/vaults/$vault_id/sync" \
+    -X PUT "$API_BASE/vaults/$vault_id/profiles/$profile_name/sync" \
     -H "X-ClawVault-Signature: $signature" \
     -H "X-ClawVault-Hash: $archive_hash" \
     -H "Content-Type: application/gzip" \
@@ -211,12 +221,14 @@ cmd_pull() {
   local signature
   signature=$(sign_request "pull:$vault_id:$ts_now" 2>/dev/null || echo "unsigned")
 
-  log "Pulling from ClawVault Cloud..."
+  local profile_name
+  profile_name=$(get_profile_name)
+  log "Pulling from ClawVault Cloud (profile: $profile_name)..."
 
   $CURL -sf -o "$archive" \
     -H "X-ClawVault-Signature: $signature" \
     -H "X-ClawVault-Timestamp: $ts_now" \
-    "$API_BASE/vaults/$vault_id/sync" 2>/dev/null || {
+    "$API_BASE/vaults/$vault_id/profiles/$profile_name/sync" 2>/dev/null || {
     log "Cloud API not available or vault not found."
     return 1
   }
@@ -338,14 +350,59 @@ cmd_info() {
   fi
 }
 
+# ─── List Profiles ───────────────────────────────────────────
+
+cmd_list_profiles() {
+  if [[ ! -f "$CLOUD_CONFIG" ]]; then
+    log "Cloud not configured."
+    return 1
+  fi
+
+  local vault_id
+  vault_id=$(python3 -c "import json; print(json.load(open('$CLOUD_CONFIG')).get('vault_id',''))" 2>/dev/null || echo "pending")
+
+  local ts_now signature
+  ts_now=$(timestamp)
+  signature=$(sign_request "list-profiles:$vault_id:$ts_now" 2>/dev/null || echo "unsigned")
+
+  local response
+  response=$($CURL -sf \
+    -H "X-ClawVault-Signature: $signature" \
+    -H "X-ClawVault-Timestamp: $ts_now" \
+    "$API_BASE/vaults/$vault_id/profiles" 2>/dev/null) || response=""
+
+  local current_profile
+  current_profile=$(get_profile_name)
+
+  if [[ -n "$response" ]]; then
+    echo ""
+    echo "Remote Profiles"
+    echo "==============="
+    echo "$response" | python3 -c "
+import sys, json
+profiles = json.load(sys.stdin).get('profiles', [])
+current = '$current_profile'
+if not profiles:
+    print('  (no profiles yet)')
+for p in profiles:
+    marker = ' ← current' if p['name'] == current else ''
+    print(f\"  {p['name']:20s}  {p.get('size_mb','?')} MB  last push: {p.get('last_push','never')}{marker}\")
+" 2>/dev/null
+    echo ""
+  else
+    log "Could not list profiles (API not reachable)"
+  fi
+}
+
 # ─── Main ─────────────────────────────────────────────────────
 
 case "${1:-info}" in
-  setup)  cmd_setup ;;
-  push)   cmd_push ;;
-  pull)   cmd_pull ;;
-  test)   cmd_test ;;
-  usage)  cmd_usage ;;
-  info)   cmd_info ;;
-  *)      echo "Usage: cloud.sh {setup|push|pull|test|usage|info}"; exit 1 ;;
+  setup)          cmd_setup ;;
+  push)           cmd_push ;;
+  pull)           cmd_pull ;;
+  test)           cmd_test ;;
+  usage)          cmd_usage ;;
+  info)           cmd_info ;;
+  list-profiles)  cmd_list_profiles ;;
+  *)              echo "Usage: cloud.sh {setup|push|pull|test|usage|info|list-profiles}"; exit 1 ;;
 esac

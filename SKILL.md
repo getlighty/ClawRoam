@@ -120,6 +120,21 @@ When the user asks about vault operations, use these:
 - **"push my soul to vault"** →
   `migrate.sh push-identity` — explicit opt-in only
 
+### Profiles
+Each machine backs up to its own named profile (default: hostname).
+Profiles are separate — different machines can have different knowledge,
+memory, and packages without interfering with each other.
+
+- **"show profile"** / **"what profile am I on"** →
+  `clawvault.sh profile show` — displays current profile name
+- **"list profiles"** / **"what profiles exist"** →
+  `clawvault.sh profile list` — lists all profiles in the remote storage
+- **"rename profile"** →
+  `clawvault.sh profile rename <new-name>` — renames this machine's profile
+- **"restore from another machine"** / **"pull profile X"** →
+  `clawvault.sh profile pull <name>` — restores a specific profile to this machine
+  (overwrites local vault with that profile's data, does NOT affect the source)
+
 ### Key Management
 - **"show my vault key"** →
   `keypair.sh show-public` — display public key (for adding to providers)
@@ -147,6 +162,11 @@ When the user asks about vault operations, use these:
 
 7. **Offline-first.** Everything works locally. Sync happens when connectivity
    is available. Queue changes and push when back online.
+
+8. **Profiles are separate by default.** Each machine pushes to its own named
+   profile (default: hostname). Profiles never merge automatically. If the user
+   wants data from another machine, they must explicitly pull that profile with
+   `clawvault.sh profile pull <name>`.
 
 ## ClawVault Cloud Pricing
 

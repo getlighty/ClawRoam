@@ -6,12 +6,22 @@
 set -euo pipefail
 
 VAULT_DIR="$HOME/.clawvault"
+CONFIG="$VAULT_DIR/config.yaml"
 PROVIDER_CONFIG="$VAULT_DIR/.provider-gdrive.json"
 RCLONE_REMOTE="clawvault-gdrive"
 REMOTE_DIR="ClawVault"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log() { echo "[clawvault:gdrive $(timestamp)] $*"; }
+
+EXCLUDE="--exclude local/** --exclude keys/** --exclude .provider-*.json --exclude .cloud-provider.json --exclude .sync-* --exclude .pull-* --exclude .heartbeat.pid --exclude .git-local/** --exclude .git/**"
+
+get_profile_name() {
+  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  local name
+  name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+  echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
+}
 
 ensure_rclone() {
   if ! command -v rclone &>/dev/null; then
@@ -60,26 +70,26 @@ JSON
 
 cmd_push() {
   ensure_rclone
-  log "Pushing to Google Drive..."
-  rclone sync "$VAULT_DIR" "${RCLONE_REMOTE}:${REMOTE_DIR}" \
-    --exclude "local/**" \
-    --exclude "keys/**" \
-    --exclude ".provider-*.json" \
-    --exclude ".cloud-provider.json" \
-    --exclude ".sync-*" \
-    --exclude ".pull-*" \
-    --exclude ".heartbeat.pid" \
-    --exclude ".git-local/**" \
-    -v 2>&1 | grep -E "Transferred|Elapsed" || true
-  log "✓ Push to Google Drive complete"
+  local profile_name; profile_name=$(get_profile_name)
+  local remote="${RCLONE_REMOTE}:${REMOTE_DIR}/profiles/$profile_name"
+  log "Pushing to Google Drive (profile: $profile_name)..."
+  rclone sync "$VAULT_DIR" "$remote" $EXCLUDE -v 2>&1 | grep -E "Transferred|Elapsed" || true
+  log "Push to Google Drive complete (profile: $profile_name)"
 }
 
 cmd_pull() {
   ensure_rclone
   local pull_dir="$VAULT_DIR/.pull-gdrive"
   mkdir -p "$pull_dir"
-  log "Pulling from Google Drive..."
-  rclone sync "${RCLONE_REMOTE}:${REMOTE_DIR}" "$pull_dir" -v 2>&1 | grep -E "Transferred|Elapsed" || true
+  local profile_name; profile_name=$(get_profile_name)
+  local remote="${RCLONE_REMOTE}:${REMOTE_DIR}/profiles/$profile_name"
+  # Fallback to root if profiles/ doesn't exist
+  if ! rclone lsd "${RCLONE_REMOTE}:${REMOTE_DIR}/profiles" &>/dev/null; then
+    remote="${RCLONE_REMOTE}:${REMOTE_DIR}"
+    log "No profiles found, falling back to root..."
+  fi
+  log "Pulling from Google Drive (profile: $profile_name)..."
+  rclone sync "$remote" "$pull_dir" -v 2>&1 | grep -E "Transferred|Elapsed" || true
 
   # Merge (don't overwrite local/)
   for f in identity/USER.md knowledge/MEMORY.md requirements.yaml manifest.json identity/instances.yaml; do
@@ -88,10 +98,10 @@ cmd_pull() {
       cp "$pull_dir/$f" "$VAULT_DIR/$f"
     fi
   done
-  [[ -d "$pull_dir/knowledge/projects" ]] && cp -r "$pull_dir/knowledge/projects/"* "$VAULT_DIR/knowledge/projects/" 2>/dev/null || true
+  [[ -d "$pull_dir/knowledge/projects" ]] && mkdir -p "$VAULT_DIR/knowledge/projects" && cp -r "$pull_dir/knowledge/projects/"* "$VAULT_DIR/knowledge/projects/" 2>/dev/null || true
 
   rm -rf "$pull_dir"
-  log "✓ Pull from Google Drive complete"
+  log "Pull from Google Drive complete (profile: $profile_name)"
 }
 
 cmd_test() {
@@ -107,16 +117,32 @@ cmd_test() {
   fi
 }
 
+cmd_list_profiles() {
+  ensure_rclone
+  local current; current=$(get_profile_name)
+  echo ""; echo "Remote Profiles"; echo "==============="
+  if rclone lsd "${RCLONE_REMOTE}:${REMOTE_DIR}/profiles/" &>/dev/null; then
+    rclone lsd "${RCLONE_REMOTE}:${REMOTE_DIR}/profiles/" 2>/dev/null | awk '{print $NF}' | while read -r p; do
+      local marker=""; [[ "$p" == "$current" ]] && marker=" ← current"
+      echo "  $p$marker"
+    done
+  else
+    echo "  (no profiles yet)"
+  fi
+  echo ""
+}
+
 cmd_info() {
   if [[ -f "$PROVIDER_CONFIG" ]]; then
     echo "  Remote: Google Drive / $REMOTE_DIR"
     echo "  Via:    rclone ($RCLONE_REMOTE)"
+    echo "  Profile: $(get_profile_name)"
   else
     echo "  Not configured"
   fi
 }
 
 case "${1:-info}" in
-  setup) cmd_setup ;; push) cmd_push ;; pull) cmd_pull ;; test) cmd_test ;; info) cmd_info ;;
-  *) echo "Usage: gdrive.sh {setup|push|pull|test|info}"; exit 1 ;;
+  setup) cmd_setup ;; push) cmd_push ;; pull) cmd_pull ;; test) cmd_test ;; info) cmd_info ;; list-profiles) cmd_list_profiles ;;
+  *) echo "Usage: gdrive.sh {setup|push|pull|test|info|list-profiles}"; exit 1 ;;
 esac

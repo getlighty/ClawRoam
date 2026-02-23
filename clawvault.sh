@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 VAULT_DIR="$HOME/.clawvault"
 CONFIG="$VAULT_DIR/config.yaml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,6 +14,12 @@ PROVIDERS_DIR="$SCRIPT_DIR/providers"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log() { echo "[clawvault $(timestamp)] $*"; }
+
+get_profile_name() {
+  local name
+  name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+  echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
+}
 
 detect_os() { case "$(uname -s)" in Darwin) echo "macos";; Linux) echo "linux";; *) echo "unknown";; esac; }
 detect_openclaw_dir() {
@@ -48,6 +54,7 @@ cmd_init() {
 vault:
   version: "$VERSION"
   instance_id: "$instance_id"
+  profile_name: "$(hostname -s 2>/dev/null || echo default)"
 
 system:
   os: "$os"
@@ -116,7 +123,10 @@ YAML
   echo ""
   echo "🦞 ClawVault initialized!"
   echo ""
+  local profile_name
+  profile_name=$(get_profile_name)
   echo "  Instance:  $instance_id"
+  echo "  Profile:   $profile_name"
   echo "  Vault:     $VAULT_DIR"
   echo "  OS:        $os"
   echo "  OpenClaw:  ${openclaw_dir:-not found}"
@@ -164,6 +174,62 @@ cmd_cloud() {
   esac
 }
 
+# ─── Profile ─────────────────────────────────────────────────
+
+cmd_profile() {
+  if [[ ! -f "$CONFIG" ]]; then
+    echo "ClawVault not initialized. Run: clawvault.sh init"
+    return 1
+  fi
+
+  local subcmd="${1:-show}"
+  case "$subcmd" in
+    show)
+      echo "Profile: $(get_profile_name)"
+      ;;
+    rename)
+      local new_name="${2:-}"
+      if [[ -z "$new_name" ]]; then
+        echo "Usage: clawvault.sh profile rename <name>"
+        return 1
+      fi
+      if [[ ! "$new_name" =~ ^[a-zA-Z0-9_-]{1,64}$ ]]; then
+        echo "Invalid name. Use letters, numbers, dashes, underscores (max 64 chars)."
+        return 1
+      fi
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        sed -i '' "s/^  profile_name: .*/  profile_name: \"$new_name\"/" "$CONFIG"
+      else
+        sed -i "s/^  profile_name: .*/  profile_name: \"$new_name\"/" "$CONFIG"
+      fi
+      log "Profile renamed to: $new_name"
+      ;;
+    list)
+      local provider
+      provider=$(grep '^provider:' "$CONFIG" 2>/dev/null | awk '{print $2}' | tr -d '"')
+      if [[ -z "$provider" || ! -f "$PROVIDERS_DIR/${provider}.sh" ]]; then
+        echo "No provider configured."
+        return 1
+      fi
+      CLAWVAULT_PROFILE="$(get_profile_name)" bash "$PROVIDERS_DIR/${provider}.sh" list-profiles
+      ;;
+    pull)
+      local target="${2:-}"
+      if [[ -z "$target" ]]; then
+        echo "Usage: clawvault.sh profile pull <name>"
+        echo "Use 'clawvault.sh profile list' to see available profiles."
+        return 1
+      fi
+      log "Pulling profile: $target"
+      CLAWVAULT_PROFILE="$target" bash "$SRC_DIR/sync-engine.sh" pull
+      log "Restored profile: $target"
+      ;;
+    *)
+      echo "Usage: clawvault.sh profile {show|rename|list|pull}"
+      ;;
+  esac
+}
+
 # ─── Help ─────────────────────────────────────────────────────
 
 cmd_help() {
@@ -204,6 +270,12 @@ cmd_help() {
   echo "  key push                Push public key to vault"
   echo "  key rotate              Generate new keypair"
   echo "  key verify              Check keypair health"
+  echo ""
+  echo "Profiles:"
+  echo "  profile show            Show current profile name"
+  echo "  profile rename <name>   Rename this machine's profile"
+  echo "  profile list            List all remote profiles"
+  echo "  profile pull <name>     Restore from a specific profile"
   echo ""
   echo "Other:"
   echo "  status                  Full vault status"
@@ -246,6 +318,9 @@ case "${1:-help}" in
 
   # Keys
   key)       bash "$SRC_DIR/keypair.sh" "${2:-show-public}" ;;
+
+  # Profiles
+  profile)   cmd_profile "${2:-show}" "${3:-}" ;;
 
   *)
     echo "Unknown command: $1"

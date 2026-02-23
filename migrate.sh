@@ -46,10 +46,22 @@ cmd_pull() {
     return 0
   fi
 
+  # Step 0: List available profiles and let user pick
+  echo ""
+  log "Checking available profiles..."
+  local provider_script="$SCRIPT_DIR/providers/${provider}.sh"
+  bash "$provider_script" list-profiles 2>/dev/null || echo "  (could not list profiles)"
+
+  local profile_name
+  profile_name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+  profile_name="${profile_name:-$(hostname -s 2>/dev/null || echo default)}"
+  read -rp "Profile to restore [$profile_name]: " chosen
+  chosen="${chosen:-$profile_name}"
+
   # Step 1: Pull from provider
   echo ""
-  log "Step 1/4: Pulling from $provider..."
-  bash "$SCRIPT_DIR/src/sync-engine.sh" pull
+  log "Step 1/4: Pulling profile '$chosen' from $provider..."
+  CLAWVAULT_PROFILE="$chosen" bash "$SCRIPT_DIR/src/sync-engine.sh" pull
 
   # Step 2: Show what was restored
   echo ""

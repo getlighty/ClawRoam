@@ -28,6 +28,13 @@ get_sync_interval() {
   grep 'interval_minutes:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"'
 }
 
+get_profile_name() {
+  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  local name
+  name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+  echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
+}
+
 # ─── Local Git (version history) ─────────────────────────────
 # Every change is committed locally before pushing to the provider.
 # This gives us: full history, rollback, diff, and conflict detection.
@@ -105,11 +112,13 @@ do_push() {
   # Commit manifest update
   auto_commit || true
 
-  # Push to provider
+  # Push to provider (with profile)
+  local profile_name
+  profile_name=$(get_profile_name)
   local provider_script="$PROVIDERS_DIR/${provider}.sh"
   if [[ -f "$provider_script" ]]; then
-    bash "$provider_script" push
-    log "✓ Pushed to $provider"
+    CLAWVAULT_PROFILE="$profile_name" bash "$provider_script" push
+    log "✓ Pushed to $provider (profile: $profile_name)"
   else
     log "Provider script not found: $provider"
     return 1
@@ -127,13 +136,14 @@ do_pull() {
     return 1
   fi
 
+  local profile_name
+  profile_name=$(get_profile_name)
   local provider_script="$PROVIDERS_DIR/${provider}.sh"
   if [[ -f "$provider_script" ]]; then
-    bash "$provider_script" pull
+    CLAWVAULT_PROFILE="$profile_name" bash "$provider_script" pull
     auto_commit || true
-    # Push pulled data to OpenClaw workspace so it stays in sync
     sync_to_openclaw
-    log "✓ Pulled from $provider"
+    log "✓ Pulled from $provider (profile: $profile_name)"
   fi
 }
 
@@ -365,6 +375,11 @@ cmd_status() {
   else
     echo "  Engine:    STOPPED"
   fi
+
+  # Profile
+  local profile_name
+  profile_name=$(get_profile_name)
+  echo "  Profile:   $profile_name"
 
   # Provider
   local provider

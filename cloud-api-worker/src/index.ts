@@ -316,6 +316,131 @@ app.get("/v1/vaults/:id/usage", async (c) => {
   });
 });
 
+// ─── Profile Push ────────────────────────────────────────────
+
+app.put("/v1/vaults/:id/profiles/:profile/sync", async (c) => {
+  const vaultId = c.req.param("id");
+  const profileName = c.req.param("profile");
+  const signature = c.req.header("X-ClawVault-Signature");
+  const archiveHash = c.req.header("X-ClawVault-Hash") || "";
+
+  if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(profileName))
+    return c.json({ error: "Invalid profile name" }, 400);
+
+  const auth = await authenticateVault(c.env.DB, vaultId, signature, archiveHash);
+  if (!auth.ok) return c.json({ error: auth.error }, 401);
+
+  const body = await c.req.arrayBuffer();
+  if (!body.byteLength) return c.json({ error: "Empty body" }, 400);
+
+  const hashBuf = await crypto.subtle.digest("SHA-256", body);
+  const actualHash = [...new Uint8Array(hashBuf)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  if (archiveHash && actualHash !== archiveHash)
+    return c.json({ error: "Hash mismatch" }, 400);
+
+  const versionId = crypto.randomUUID();
+  const s3Key = `vaults/${vaultId}/profiles/${profileName}/${versionId}.tar.gz`;
+
+  await c.env.STORAGE.put(s3Key, body, {
+    httpMetadata: { contentType: "application/gzip" },
+  });
+
+  await c.env.DB
+    .prepare(
+      "INSERT INTO vault_versions (id, vault_id, s3_key, size_bytes, hash_sha256, pushed_by, profile_name) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(versionId, vaultId, s3Key, body.byteLength, actualHash, auth.fingerprint, profileName)
+    .run();
+
+  // Prune old versions for this profile only
+  const old = await c.env.DB
+    .prepare(
+      "SELECT id, s3_key FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?"
+    )
+    .bind(vaultId, profileName, MAX_VERSIONS)
+    .all<{ id: string; s3_key: string }>();
+
+  for (const v of old.results) {
+    await c.env.STORAGE.delete(v.s3_key);
+    await c.env.DB.prepare("DELETE FROM vault_versions WHERE id = ?").bind(v.id).run();
+  }
+
+  return c.json({ status: "ok", version_id: versionId, profile: profileName, size_bytes: body.byteLength }, 201);
+});
+
+// ─── Profile Pull ────────────────────────────────────────────
+
+app.get("/v1/vaults/:id/profiles/:profile/sync", async (c) => {
+  const vaultId = c.req.param("id");
+  const profileName = c.req.param("profile");
+  const signature = c.req.header("X-ClawVault-Signature");
+  const timestamp = c.req.header("X-ClawVault-Timestamp") || "";
+
+  const auth = await authenticateVault(
+    c.env.DB, vaultId, signature, `pull:${vaultId}:${timestamp}`
+  );
+  if (!auth.ok) return c.json({ error: auth.error }, 401);
+
+  const latest = await c.env.DB
+    .prepare(
+      "SELECT s3_key, hash_sha256, id FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT 1"
+    )
+    .bind(vaultId, profileName)
+    .first<{ s3_key: string; hash_sha256: string; id: string }>();
+
+  if (!latest) return c.json({ error: "No data for profile" }, 404);
+
+  const obj = await c.env.STORAGE.get(latest.s3_key);
+  if (!obj) return c.json({ error: "Archive not found" }, 404);
+
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": "application/gzip",
+      "X-ClawVault-Hash": latest.hash_sha256,
+      "X-ClawVault-Version": latest.id,
+      "X-ClawVault-Profile": profileName,
+    },
+  });
+});
+
+// ─── List Profiles ───────────────────────────────────────────
+
+app.get("/v1/vaults/:id/profiles", async (c) => {
+  const vaultId = c.req.param("id");
+  const signature = c.req.header("X-ClawVault-Signature");
+  const timestamp = c.req.header("X-ClawVault-Timestamp") || "";
+
+  const auth = await authenticateVault(
+    c.env.DB, vaultId, signature, `list-profiles:${vaultId}:${timestamp}`
+  );
+  if (!auth.ok) return c.json({ error: auth.error }, 401);
+
+  const profiles = await c.env.DB
+    .prepare(`
+      SELECT profile_name,
+             MAX(created_at) as last_push,
+             (SELECT size_bytes FROM vault_versions v2
+              WHERE v2.vault_id = ? AND v2.profile_name = vault_versions.profile_name
+              ORDER BY v2.created_at DESC LIMIT 1) as size_bytes
+      FROM vault_versions
+      WHERE vault_id = ?
+      GROUP BY profile_name
+      ORDER BY last_push DESC
+    `)
+    .bind(vaultId, vaultId)
+    .all<{ profile_name: string; last_push: string; size_bytes: number }>();
+
+  return c.json({
+    profiles: profiles.results.map((p) => ({
+      name: p.profile_name,
+      last_push: p.last_push,
+      size_mb: Math.round((p.size_bytes || 0) / 1048576 * 100) / 100,
+    })),
+  });
+});
+
 // ─── Register key ────────────────────────────────────────────
 
 app.post("/v1/vaults/:id/keys", async (c) => {
