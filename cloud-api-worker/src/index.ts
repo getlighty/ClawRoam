@@ -491,4 +491,18 @@ app.delete("/v1/vaults/:id/keys/:fp", async (c) => {
   return c.json({ status: "revoked", fingerprint: fp });
 });
 
+// ─── Sync rules — get ────────────────────────────────────────
+
+app.get("/v1/vaults/:id/profiles/:profile/sync-rules", async (c) => {
+  const vaultId = c.req.param("id");
+  const profileName = c.req.param("profile");
+  const ts = c.req.header("X-ClawRoam-Timestamp") || String(Math.floor(Date.now() / 1000));
+  const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `sync-rules:${vaultId}:${profileName}:${ts}`);
+  if (!a.ok) return c.json({ error: a.error }, 401);
+  const rows = await c.env.DB.prepare(
+    "SELECT path FROM sync_rules WHERE vault_id = ? AND profile_name = ? ORDER BY path"
+  ).bind(vaultId, profileName).all<{ path: string }>();
+  return c.json({ excluded: rows.results.map(r => r.path) });
+});
+
 export default app;
