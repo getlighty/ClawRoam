@@ -1,15 +1,15 @@
-# 🦞 ClawVault
+# 🦞 ClawRoam
 
 **Portable identity vault for OpenClaw. Your AI agent follows you everywhere.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-skill-orange.svg)](SKILL.md)
 
-ClawVault is an open-source OpenClaw skill that syncs your agent's knowledge, memory, and system packages across all your machines — like iCloud, but for AI agents.
+ClawRoam is an open-source OpenClaw skill that syncs your agent's knowledge, memory, and system packages across all your machines — like iCloud, but for AI agents.
 
 ## The idea
 
-You have a work laptop, a home machine, maybe a server. Each runs OpenClaw. You want them to share your knowledge but have their own personality. ClawVault makes that work:
+You have a work laptop, a home machine, maybe a server. Each runs OpenClaw. You want them to share your knowledge but have their own personality. ClawRoam makes that work:
 
 - **Knowledge is shared** — USER.md, MEMORY.md, projects, package lists
 - **Soul is local** — each instance keeps its own SOUL.md and IDENTITY.md
@@ -21,24 +21,24 @@ You have a work laptop, a home machine, maybe a server. Each runs OpenClaw. You 
 
 ```bash
 # Install the skill
-clawdhub install clawvault
+clawdhub install getlighty-clawroam
 
 # Initialize (scans packages, generates keypair, captures knowledge)
-clawvault init
+clawroam init
 
 # Pick storage — managed cloud (50 MB free):
-clawvault provider setup cloud
+clawroam provider setup cloud
 
 # Or bring your own:
-clawvault provider setup gdrive    # Google Drive
-clawvault provider setup dropbox   # Dropbox
-clawvault provider setup git       # Any git repo
-clawvault provider setup ftp       # FTP/SFTP
-clawvault provider setup s3        # S3-compatible
-clawvault provider setup local     # USB/NAS
+clawroam provider setup gdrive    # Google Drive
+clawroam provider setup dropbox   # Dropbox
+clawroam provider setup git       # Any git repo
+clawroam provider setup ftp       # FTP/SFTP
+clawroam provider setup s3        # S3-compatible
+clawroam provider setup local     # USB/NAS
 
 # Start auto-sync
-clawvault sync start
+clawroam sync start
 ```
 
 ### On a new machine
@@ -46,20 +46,20 @@ clawvault sync start
 ```bash
 # Install OpenClaw + skill
 npm install -g openclaw
-clawdhub install clawvault
+clawdhub install getlighty-clawroam
 
 # Connect to your vault
-clawvault init
-clawvault provider setup cloud  # same credentials
+clawroam init
+clawroam provider setup cloud  # same credentials
 
 # Pull everything
-clawvault migrate pull
+clawroam migrate pull
 # → Restores knowledge, shows package diff, offers to install missing
 ```
 
 ## How sync works
 
-ClawVault works like a combination of **iCloud** and **Git**:
+ClawRoam works like a combination of **iCloud** and **Git**:
 
 1. **File watcher** detects changes in your vault (real-time via `fswatch`, or polling)
 2. **Auto-commit** creates a local git commit with what changed
@@ -68,7 +68,7 @@ ClawVault works like a combination of **iCloud** and **Git**:
 5. On pull, conflicts are shown as diffs — you choose what wins
 
 ```
-~/.clawvault/
+~/.clawroam/
 ├── config.yaml              # Vault configuration
 ├── requirements.yaml        # System packages (brew/apt/npm/pip)
 ├── manifest.json            # What's in the vault + checksums
@@ -82,13 +82,13 @@ ClawVault works like a combination of **iCloud** and **Git**:
 │   ├── SOUL.md              # This machine's personality
 │   └── IDENTITY.md          # This machine's identity
 └── keys/
-    ├── clawvault_ed25519     # Private key (never leaves machine)
-    └── clawvault_ed25519.pub # Public key (registered with provider)
+    ├── clawroam_ed25519     # Private key (never leaves machine)
+    └── clawroam_ed25519.pub # Public key (registered with provider)
 ```
 
 ## Package tracking
 
-ClawVault scans and tracks installed packages across:
+ClawRoam scans and tracks installed packages across:
 
 | Manager | macOS | Linux |
 |---------|-------|-------|
@@ -101,9 +101,9 @@ ClawVault scans and tracks installed packages across:
 
 When migrating, it shows what's missing and generates install commands for the target OS.
 
-## ClawVault Cloud
+## ClawRoam Cloud
 
-The skill is 100% free and open source (MIT). **ClawVault Cloud** is the optional managed storage for people who don't want to configure their own:
+The skill is 100% free and open source (MIT). **ClawRoam Cloud** is the optional managed storage for people who don't want to configure their own:
 
 | Usage | Cost |
 |-------|------|
@@ -118,24 +118,24 @@ Most single-user vaults are 10-30 MB — comfortably free. A power user at 200 M
 
 | Command | What it does |
 |---------|-------------|
-| `clawvault init` | Initialize vault, generate keypair, scan packages |
-| `clawvault provider setup <n>` | Configure storage provider |
-| `clawvault provider list` | Show available providers |
-| `clawvault sync start` | Start auto-sync daemon |
-| `clawvault sync stop` | Stop auto-sync |
-| `clawvault sync push` | Force push now |
-| `clawvault sync pull` | Force pull now |
-| `clawvault log` | Show vault commit history |
-| `clawvault diff` | Show pending changes |
-| `clawvault rollback` | Revert to previous state |
-| `clawvault packages scan` | Scan installed packages |
-| `clawvault packages diff` | Compare local vs vault |
-| `clawvault packages install` | Install missing from vault |
-| `clawvault migrate pull` | Full migration wizard |
-| `clawvault migrate push-identity` | Push SOUL.md to vault (opt-in) |
-| `clawvault key show` | Show public key |
-| `clawvault key rotate` | Generate new keypair |
-| `clawvault status` | Full vault status |
+| `clawroam init` | Initialize vault, generate keypair, scan packages |
+| `clawroam provider setup <n>` | Configure storage provider |
+| `clawroam provider list` | Show available providers |
+| `clawroam sync start` | Start auto-sync daemon |
+| `clawroam sync stop` | Stop auto-sync |
+| `clawroam sync push` | Force push now |
+| `clawroam sync pull` | Force pull now |
+| `clawroam log` | Show vault commit history |
+| `clawroam diff` | Show pending changes |
+| `clawroam rollback` | Revert to previous state |
+| `clawroam packages scan` | Scan installed packages |
+| `clawroam packages diff` | Compare local vs vault |
+| `clawroam packages install` | Install missing from vault |
+| `clawroam migrate pull` | Full migration wizard |
+| `clawroam migrate push-identity` | Push SOUL.md to vault (opt-in) |
+| `clawroam key show` | Show public key |
+| `clawroam key rotate` | Generate new keypair |
+| `clawroam status` | Full vault status |
 
 ## Security
 
@@ -149,9 +149,9 @@ Most single-user vaults are 10-30 MB — comfortably free. A power user at 200 M
 ## Repo structure
 
 ```
-clawvault/
+clawroam/
 ├── SKILL.md               # OpenClaw skill definition
-├── clawvault.sh            # Main CLI entry point
+├── clawroam.sh            # Main CLI entry point
 ├── track-packages.sh       # Package scanner
 ├── migrate.sh              # Migration wizard
 ├── src/
@@ -159,7 +159,7 @@ clawvault/
 │   ├── keypair.sh          # Ed25519 key management
 │   └── provider.sh         # Provider manager
 ├── providers/
-│   ├── cloud.sh            # ClawVault Cloud (managed)
+│   ├── cloud.sh            # ClawRoam Cloud (managed)
 │   ├── gdrive.sh           # Google Drive (via rclone)
 │   ├── dropbox.sh          # Dropbox (via rclone)
 │   ├── ftp.sh              # FTP/SFTP (via rsync+ssh)

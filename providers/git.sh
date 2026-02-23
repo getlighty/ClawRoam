@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# ClawVault Provider — Git (auto-commit + push with Ed25519 key)
+# ClawRoam Provider — Git (auto-commit + push with Ed25519 key)
 set -euo pipefail
-VAULT_DIR="$HOME/.clawvault"; CONFIG="$VAULT_DIR/config.yaml"; REPO_DIR="$VAULT_DIR/.git-local"
+VAULT_DIR="$HOME/.clawroam"; CONFIG="$VAULT_DIR/config.yaml"; REPO_DIR="$VAULT_DIR/.git-local"
 PROVIDER_CONFIG="$VAULT_DIR/.provider-git.json"
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawvault:git $(timestamp)] $*"; }
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawroam:git $(timestamp)] $*"; }
 
-_git() { GIT_SSH_COMMAND="ssh -i $VAULT_DIR/keys/clawvault_ed25519 -o StrictHostKeyChecking=no" git -C "$REPO_DIR" "$@"; }
+_git() { GIT_SSH_COMMAND="ssh -i $VAULT_DIR/keys/clawroam_ed25519 -o StrictHostKeyChecking=no" git -C "$REPO_DIR" "$@"; }
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
@@ -23,14 +23,14 @@ cmd_setup() {
 
   echo ""; echo "Add this deploy key to your repo (read/write access):"
   echo "────────────────────────────────"
-  cat "$VAULT_DIR/keys/clawvault_ed25519.pub" 2>/dev/null
+  cat "$VAULT_DIR/keys/clawroam_ed25519.pub" 2>/dev/null
   echo "────────────────────────────────"
   echo ""; read -rp "Press Enter once the key is added..."
 
   if [[ -d "$REPO_DIR/.git" ]]; then
     _git remote set-url origin "$remote_url" 2>/dev/null || _git remote add origin "$remote_url"
   else
-    GIT_SSH_COMMAND="ssh -i $VAULT_DIR/keys/clawvault_ed25519 -o StrictHostKeyChecking=no" git clone "$remote_url" "$REPO_DIR" 2>/dev/null || {
+    GIT_SSH_COMMAND="ssh -i $VAULT_DIR/keys/clawroam_ed25519 -o StrictHostKeyChecking=no" git clone "$remote_url" "$REPO_DIR" 2>/dev/null || {
       mkdir -p "$REPO_DIR"; git -C "$REPO_DIR" init; git -C "$REPO_DIR" checkout -b "$branch"
       git -C "$REPO_DIR" remote add origin "$remote_url"
     }

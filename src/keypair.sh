@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ClawVault — Keypair Management
+# ClawRoam — Keypair Management
 # Ed25519 keypair for authenticating with vault providers
 # Private key in OpenSSH format (works with SSH/git providers)
 # PEM copy derived automatically for API signing (openssl pkeyutl)
@@ -8,14 +8,14 @@
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 KEY_DIR="$VAULT_DIR/keys"
-PRIVATE_KEY="$KEY_DIR/clawvault_ed25519"
-PUBLIC_KEY="$KEY_DIR/clawvault_ed25519.pub"
-SIGNING_KEY="$KEY_DIR/clawvault_ed25519.pem"
+PRIVATE_KEY="$KEY_DIR/clawroam_ed25519"
+PUBLIC_KEY="$KEY_DIR/clawroam_ed25519.pub"
+SIGNING_KEY="$KEY_DIR/clawroam_ed25519.pem"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault:keys $(timestamp)] $*"; }
+log() { echo "[clawroam:keys $(timestamp)] $*"; }
 
 # Convert OpenSSH Ed25519 private key → PKCS8 PEM for openssl signing.
 # Pure Python, no external deps. Parses the OpenSSH wire format to
@@ -91,7 +91,7 @@ cmd_generate() {
   log "Generating Ed25519 keypair..."
 
   local comment
-  comment="clawvault@$(hostname -s 2>/dev/null || echo unknown)-$(date +%s)"
+  comment="clawroam@$(hostname -s 2>/dev/null || echo unknown)-$(date +%s)"
 
   # Generate OpenSSH-format Ed25519 key (works with SSH/git providers)
   ssh-keygen -t ed25519 \
@@ -132,7 +132,7 @@ cmd_show_public() {
   fi
 
   echo ""
-  echo "ClawVault Public Key"
+  echo "ClawRoam Public Key"
   echo "━━━━━━━━━━━━━━━━━━━━"
   cat "$PUBLIC_KEY"
   echo ""
@@ -179,9 +179,9 @@ cmd_rotate() {
   mkdir -p "$archive_dir"
   local ts
   ts=$(date +%Y%m%d-%H%M%S)
-  mv "$PRIVATE_KEY" "$archive_dir/clawvault_ed25519.$ts"
-  mv "$PUBLIC_KEY" "$archive_dir/clawvault_ed25519.$ts.pub"
-  [[ -f "$SIGNING_KEY" ]] && mv "$SIGNING_KEY" "$archive_dir/clawvault_ed25519.$ts.pem"
+  mv "$PRIVATE_KEY" "$archive_dir/clawroam_ed25519.$ts"
+  mv "$PUBLIC_KEY" "$archive_dir/clawroam_ed25519.$ts.pub"
+  [[ -f "$SIGNING_KEY" ]] && mv "$SIGNING_KEY" "$archive_dir/clawroam_ed25519.$ts.pem"
   log "Old keypair archived to $archive_dir/"
 
   # Generate new
@@ -189,9 +189,9 @@ cmd_rotate() {
 
   echo ""
   log "Remember to update your public key with your vault provider!"
-  log "  For ClawVault Cloud: clawvault.sh cloud update-key"
+  log "  For ClawRoam Cloud: clawroam.sh cloud update-key"
   log "  For Git: add the new public key to your repo's deploy keys"
-  log "  For others: re-run 'clawvault.sh provider setup <name>'"
+  log "  For others: re-run 'clawroam.sh provider setup <name>'"
 }
 
 # ─── Verify ───────────────────────────────────────────────────
@@ -227,9 +227,9 @@ cmd_verify() {
   # Test SSH signing
   local test_file
   test_file=$(mktemp)
-  echo "clawvault-verify-test" > "$test_file"
+  echo "clawroam-verify-test" > "$test_file"
 
-  if ssh-keygen -Y sign -f "$PRIVATE_KEY" -n clawvault "$test_file" &>/dev/null; then
+  if ssh-keygen -Y sign -f "$PRIVATE_KEY" -n clawroam "$test_file" &>/dev/null; then
     log "SSH signing works"
   else
     log "SSH signing failed"

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# ClawVault — Package Tracker
+# ClawRoam — Package Tracker
 # Scans system package managers and writes requirements.yaml
 # Usage: track-packages.sh {scan|diff|install}
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 REQ_FILE="$VAULT_DIR/requirements.yaml"
 VAULT_REQ="$VAULT_DIR/.vault-requirements.yaml"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault:packages $(timestamp)] $*"; }
+log() { echo "[clawroam:packages $(timestamp)] $*"; }
 
 detect_os() {
   case "$(uname -s)" in
@@ -165,7 +165,7 @@ cmd_scan() {
   log "Scanning packages ($os)..."
 
   {
-    echo "# ClawVault Package Requirements"
+    echo "# ClawRoam Package Requirements"
     echo "# Generated: $(timestamp)"
     echo "# OS: $os"
     echo "# Hostname: $(hostname -s 2>/dev/null || echo unknown)"

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# ClawVault Provider — WebDAV (Nextcloud, ownCloud, etc., via rclone)
+# ClawRoam Provider — WebDAV (Nextcloud, ownCloud, etc., via rclone)
 set -euo pipefail
-VAULT_DIR="$HOME/.clawvault"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-webdav.json"
-RCLONE_REMOTE="clawvault-webdav"; REMOTE_DIR="ClawVault"
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawvault:webdav $(timestamp)] $*"; }
+VAULT_DIR="$HOME/.clawroam"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-webdav.json"
+RCLONE_REMOTE="clawroam-webdav"; REMOTE_DIR="ClawRoam"
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawroam:webdav $(timestamp)] $*"; }
 
 ensure_rclone() {
   if ! command -v rclone &>/dev/null; then
@@ -15,7 +15,7 @@ ensure_rclone() {
 EXCLUDE="--exclude local/** --exclude keys/** --exclude .provider-*.json --exclude .cloud-provider.json --exclude .sync-* --exclude .pull-* --exclude .heartbeat.pid --exclude .git-local/** --exclude .git/**"
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# ClawVault Provider — FTP / SFTP
+# ClawRoam Provider — FTP / SFTP
 set -euo pipefail
-VAULT_DIR="$HOME/.clawvault"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-ftp.json"
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawvault:ftp $(timestamp)] $*"; }
+VAULT_DIR="$HOME/.clawroam"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-ftp.json"
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawroam:ftp $(timestamp)] $*"; }
 EXCLUDE="--exclude local/ --exclude keys/ --exclude .provider-*.json --exclude .cloud-provider.json --exclude .sync-* --exclude .pull-* --exclude .heartbeat.pid --exclude .git-local/"
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
@@ -16,12 +16,12 @@ cmd_setup() {
   echo ""; echo "🔗 FTP/SFTP Setup"; echo "━━━━━━━━━━━━━━━━━"
   read -rp "Protocol [sftp]: " proto; proto="${proto:-sftp}"
   read -rp "Host: " host; read -rp "Port [22]: " port; port="${port:-22}"
-  read -rp "Username: " user; read -rp "Remote path [/clawvault]: " rpath; rpath="${rpath:-/clawvault}"
+  read -rp "Username: " user; read -rp "Remote path [/clawroam]: " rpath; rpath="${rpath:-/clawroam}"
   echo ""
-  echo "Authentication: your ClawVault Ed25519 key will be used."
+  echo "Authentication: your ClawRoam Ed25519 key will be used."
   echo "Add this public key to your server's authorized_keys:"
   echo "────────────────────────────────"
-  cat "$VAULT_DIR/keys/clawvault_ed25519.pub" 2>/dev/null
+  cat "$VAULT_DIR/keys/clawroam_ed25519.pub" 2>/dev/null
   echo "────────────────────────────────"
 
   cat > "$PROVIDER_CONFIG" <<JSON
@@ -39,7 +39,7 @@ _load() {
 }
 
 cmd_push() {
-  _load; local key="$VAULT_DIR/keys/clawvault_ed25519"
+  _load; local key="$VAULT_DIR/keys/clawroam_ed25519"
   local profile_name; profile_name=$(get_profile_name)
   local target_path="$rpath/profiles/$profile_name"
   ssh -i "$key" -p "$port" -o StrictHostKeyChecking=no "$user@$host" "mkdir -p '$target_path'" 2>/dev/null || true
@@ -50,7 +50,7 @@ cmd_push() {
 }
 
 cmd_pull() {
-  _load; local key="$VAULT_DIR/keys/clawvault_ed25519"
+  _load; local key="$VAULT_DIR/keys/clawroam_ed25519"
   local d="$VAULT_DIR/.pull-ftp"; mkdir -p "$d"
   local profile_name; profile_name=$(get_profile_name)
   local source_path="$rpath/profiles/$profile_name"
@@ -70,14 +70,14 @@ cmd_pull() {
 }
 
 cmd_test() {
-  _load; local key="$VAULT_DIR/keys/clawvault_ed25519"
+  _load; local key="$VAULT_DIR/keys/clawroam_ed25519"
   ssh -i "$key" -p "$port" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$user@$host" "ls $rpath" &>/dev/null \
     && log "✓ Connected to $host" || log "✗ Connection failed"
 }
 
 cmd_list_profiles() {
   if [[ ! -f "$PROVIDER_CONFIG" ]]; then log "Not configured."; return 1; fi
-  _load; local key="$VAULT_DIR/keys/clawvault_ed25519"
+  _load; local key="$VAULT_DIR/keys/clawroam_ed25519"
   local current; current=$(get_profile_name)
   echo ""; echo "Remote Profiles"; echo "==============="
   if ssh -i "$key" -p "$port" -o StrictHostKeyChecking=no "$user@$host" "ls '$rpath/profiles'" &>/dev/null; then

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ClawVault — Dashboard</title>
+<title>ClawRoam — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -391,7 +391,7 @@
   <div class="login-card">
     <div class="login-header">
       <div class="logo-icon">&#x1F99E;</div>
-      <h2>ClawVault Dashboard</h2>
+      <h2>ClawRoam Dashboard</h2>
       <p>Sign in to manage your vault profiles, browse files, and copy between instances.</p>
     </div>
     <form id="login-form" onsubmit="return handleLogin(event)">
@@ -416,7 +416,7 @@
   <div class="nav-left">
     <a href="index.html" class="logo">
       <div class="logo-icon">&#x1F99E;</div>
-      <span class="logo-text">ClawVault</span>
+      <span class="logo-text">ClawRoam</span>
       <span class="logo-badge">dashboard</span>
     </a>
   </div>
@@ -460,12 +460,12 @@
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
-var API_BASE = 'https://clawvault-api.ovisoftblue.workers.dev/v1';
+var API_BASE = 'https://clawroam-api.ovisoftblue.workers.dev/v1';
 
 var state = {
-  token: localStorage.getItem('cv_token') || null,
-  vaultId: localStorage.getItem('cv_vault_id') || null,
-  email: localStorage.getItem('cv_email') || null,
+  token: localStorage.getItem('cs_token') || null,
+  vaultId: localStorage.getItem('cs_vault_id') || null,
+  email: localStorage.getItem('cs_email') || null,
   profiles: []
 };
 
@@ -644,9 +644,9 @@ function handleLogin(e) {
       state.vaultId = data.vault_id || vaultId;
       state.email = data.email || email;
 
-      localStorage.setItem('cv_token', state.token);
-      localStorage.setItem('cv_vault_id', state.vaultId);
-      localStorage.setItem('cv_email', state.email);
+      localStorage.setItem('cs_token', state.token);
+      localStorage.setItem('cs_vault_id', state.vaultId);
+      localStorage.setItem('cs_email', state.email);
 
       showDashboard();
     })
@@ -665,9 +665,9 @@ function logout() {
   state.email = null;
   state.profiles = [];
 
-  localStorage.removeItem('cv_token');
-  localStorage.removeItem('cv_vault_id');
-  localStorage.removeItem('cv_email');
+  localStorage.removeItem('cs_token');
+  localStorage.removeItem('cs_vault_id');
+  localStorage.removeItem('cs_email');
 
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('dashboard').classList.remove('active');

@@ -23,11 +23,11 @@ const s3 = useS3
     })
   : null;
 
-const bucket = process.env.S3_BUCKET || "clawvault";
+const bucket = process.env.S3_BUCKET || "clawroam";
 
 // ─── Filesystem backend (local dev / no S3 configured) ──────
 
-const FS_ROOT = process.env.STORAGE_PATH || "/tmp/clawvault-storage";
+const FS_ROOT = process.env.STORAGE_PATH || "/tmp/clawroam-storage";
 
 async function ensureDir(filePath: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });

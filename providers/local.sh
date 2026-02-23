@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# ClawVault Provider — Local directory (USB drive, NAS mount, shared folder)
+# ClawRoam Provider — Local directory (USB drive, NAS mount, shared folder)
 set -euo pipefail
-VAULT_DIR="$HOME/.clawvault"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-local.json"
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawvault:local $(timestamp)] $*"; }
+VAULT_DIR="$HOME/.clawroam"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-local.json"
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawroam:local $(timestamp)] $*"; }
 
 EXCLUDE="--exclude local/ --exclude keys/ --exclude .provider-*.json --exclude .cloud-provider.json --exclude .sync-* --exclude .pull-* --exclude .heartbeat.pid --exclude .git-local/ --exclude .git/"
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
@@ -17,7 +17,7 @@ cmd_setup() {
   echo ""; echo "Local Storage Setup"; echo "==================="
   echo "Use a USB drive, NAS mount, or any local/network directory."
   echo ""
-  read -rp "Directory path (e.g. /Volumes/USB/clawvault or /mnt/nas/clawvault): " target_dir
+  read -rp "Directory path (e.g. /Volumes/USB/clawroam or /mnt/nas/clawroam): " target_dir
   if [[ -z "$target_dir" ]]; then log "Path required."; return 1; fi
 
   if [[ ! -d "$target_dir" ]]; then

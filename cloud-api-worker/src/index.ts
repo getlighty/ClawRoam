@@ -20,7 +20,7 @@ app.use("*", async (c, next) => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-ClawVault-Signature, X-ClawVault-Hash, X-ClawVault-Timestamp",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-ClawRoam-Signature, X-ClawRoam-Hash, X-ClawRoam-Timestamp",
         "Access-Control-Max-Age": "86400",
       },
     });
@@ -133,7 +133,7 @@ async function auth(
     if (claims.vault_id !== vaultId) return { ok: false, error: "Token vault mismatch" };
     return { ok: true, fingerprint: "dashboard" };
   }
-  return authenticateVault(db, vaultId, req.header("X-ClawVault-Signature"), sigPayload);
+  return authenticateVault(db, vaultId, req.header("X-ClawRoam-Signature"), sigPayload);
 }
 
 // ─── Tar/gzip utilities ──────────────────────────────────────
@@ -284,7 +284,7 @@ app.post("/v1/signup", async (c) => {
 
 app.put("/v1/vaults/:id/sync", async (c) => {
   const vaultId = c.req.param("id");
-  const archiveHash = c.req.header("X-ClawVault-Hash") || "";
+  const archiveHash = c.req.header("X-ClawRoam-Hash") || "";
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, archiveHash);
   if (!a.ok) return c.json({ error: a.error }, 401);
   const body = await c.req.arrayBuffer();
@@ -303,21 +303,21 @@ app.put("/v1/vaults/:id/sync", async (c) => {
 
 app.get("/v1/vaults/:id/sync", async (c) => {
   const vaultId = c.req.param("id");
-  const ts = c.req.header("X-ClawVault-Timestamp") || "";
+  const ts = c.req.header("X-ClawRoam-Timestamp") || "";
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `pull:${vaultId}:${ts}`);
   if (!a.ok) return c.json({ error: a.error }, 401);
   const latest = await c.env.DB.prepare("SELECT s3_key, hash_sha256, id FROM vault_versions WHERE vault_id = ? ORDER BY created_at DESC LIMIT 1").bind(vaultId).first<{ s3_key: string; hash_sha256: string; id: string }>();
   if (!latest) return c.json({ error: "No vault data" }, 404);
   const obj = await c.env.STORAGE.get(latest.s3_key);
   if (!obj) return c.json({ error: "Archive not found" }, 404);
-  return new Response(obj.body, { headers: { "Content-Type": "application/gzip", "X-ClawVault-Hash": latest.hash_sha256, "X-ClawVault-Version": latest.id } });
+  return new Response(obj.body, { headers: { "Content-Type": "application/gzip", "X-ClawRoam-Hash": latest.hash_sha256, "X-ClawRoam-Version": latest.id } });
 });
 
 // ─── Usage ───────────────────────────────────────────────────
 
 app.get("/v1/vaults/:id/usage", async (c) => {
   const vaultId = c.req.param("id");
-  const ts = c.req.header("X-ClawVault-Timestamp") || "";
+  const ts = c.req.header("X-ClawRoam-Timestamp") || "";
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `usage:${vaultId}:${ts}`);
   if (!a.ok) return c.json({ error: a.error }, 401);
   const latest = await c.env.DB.prepare("SELECT size_bytes FROM vault_versions WHERE vault_id = ? ORDER BY created_at DESC LIMIT 1").bind(vaultId).first<{ size_bytes: number }>();
@@ -334,7 +334,7 @@ app.get("/v1/vaults/:id/usage", async (c) => {
 app.put("/v1/vaults/:id/profiles/:profile/sync", async (c) => {
   const vaultId = c.req.param("id");
   const profileName = c.req.param("profile");
-  const archiveHash = c.req.header("X-ClawVault-Hash") || "";
+  const archiveHash = c.req.header("X-ClawRoam-Hash") || "";
   if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(profileName)) return c.json({ error: "Invalid profile name" }, 400);
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, archiveHash);
   if (!a.ok) return c.json({ error: a.error }, 401);
@@ -357,21 +357,21 @@ app.put("/v1/vaults/:id/profiles/:profile/sync", async (c) => {
 app.get("/v1/vaults/:id/profiles/:profile/sync", async (c) => {
   const vaultId = c.req.param("id");
   const profileName = c.req.param("profile");
-  const ts = c.req.header("X-ClawVault-Timestamp") || "";
+  const ts = c.req.header("X-ClawRoam-Timestamp") || "";
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `pull:${vaultId}:${ts}`);
   if (!a.ok) return c.json({ error: a.error }, 401);
   const latest = await c.env.DB.prepare("SELECT s3_key, hash_sha256, id FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT 1").bind(vaultId, profileName).first<{ s3_key: string; hash_sha256: string; id: string }>();
   if (!latest) return c.json({ error: "No data for profile" }, 404);
   const obj = await c.env.STORAGE.get(latest.s3_key);
   if (!obj) return c.json({ error: "Archive not found" }, 404);
-  return new Response(obj.body, { headers: { "Content-Type": "application/gzip", "X-ClawVault-Hash": latest.hash_sha256, "X-ClawVault-Version": latest.id, "X-ClawVault-Profile": profileName } });
+  return new Response(obj.body, { headers: { "Content-Type": "application/gzip", "X-ClawRoam-Hash": latest.hash_sha256, "X-ClawRoam-Version": latest.id, "X-ClawRoam-Profile": profileName } });
 });
 
 // ─── List profiles ───────────────────────────────────────────
 
 app.get("/v1/vaults/:id/profiles", async (c) => {
   const vaultId = c.req.param("id");
-  const ts = c.req.header("X-ClawVault-Timestamp") || "";
+  const ts = c.req.header("X-ClawRoam-Timestamp") || "";
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `list-profiles:${vaultId}:${ts}`);
   if (!a.ok) return c.json({ error: a.error }, 401);
   const profiles = await c.env.DB.prepare(`

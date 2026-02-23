@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# ClawVault — Main CLI
+# ClawRoam — Main CLI
 # Portable identity vault for OpenClaw
-# Usage: clawvault.sh <command> [args]
+# Usage: clawroam.sh <command> [args]
 
 set -euo pipefail
 
 VERSION="3.0.0"
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/src"
 PROVIDERS_DIR="$SCRIPT_DIR/providers"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault $(timestamp)] $*"; }
+log() { echo "[clawroam$(timestamp)] $*"; }
 
 get_profile_name() {
   local name
@@ -33,11 +33,11 @@ detect_openclaw_dir() {
 cmd_init() {
   if [[ -f "$CONFIG" ]]; then
     log "Already initialized at $VAULT_DIR"
-    log "Run 'clawvault.sh status' or 'clawvault.sh provider setup <name>'"
+    log "Run 'clawroam.sh status' or 'clawroam.sh provider setup <name>'"
     return 0
   fi
 
-  log "Initializing ClawVault v$VERSION..."
+  log "Initializing ClawRoam v$VERSION..."
 
   local os instance_id openclaw_dir
   os="$(detect_os)"
@@ -48,7 +48,7 @@ cmd_init() {
 
   # Create config
   cat > "$CONFIG" <<YAML
-# ClawVault Configuration v$VERSION
+# ClawRoam Configuration v$VERSION
 # Generated: $(timestamp)
 
 vault:
@@ -61,7 +61,7 @@ system:
   hostname: "$(hostname -s 2>/dev/null || echo unknown)"
   openclaw_dir: "$openclaw_dir"
 
-# Set by 'clawvault.sh provider setup <name>'
+# Set by 'clawroam.sh provider setup <name>'
 provider: ""
 
 sync:
@@ -88,7 +88,7 @@ YAML
 
   # Create instance registry
   cat > "$VAULT_DIR/identity/instances.yaml" <<YAML
-# ClawVault Instance Registry
+# ClawRoam Instance Registry
 instances:
   - id: "$instance_id"
     hostname: "$(hostname -s 2>/dev/null || echo unknown)"
@@ -121,7 +121,7 @@ YAML
   bash "$SRC_DIR/sync-engine.sh" status >/dev/null 2>&1 || true
 
   echo ""
-  echo "🦞 ClawVault initialized!"
+  echo "🦞 ClawRoam initialized!"
   echo ""
   local profile_name
   profile_name=$(get_profile_name)
@@ -132,13 +132,13 @@ YAML
   echo "  OpenClaw:  ${openclaw_dir:-not found}"
   echo ""
   echo "Next: pick a storage provider:"
-  echo "  clawvault.sh provider setup cloud      ← managed, easiest"
-  echo "  clawvault.sh provider setup gdrive     ← Google Drive"
-  echo "  clawvault.sh provider setup dropbox    ← Dropbox"
-  echo "  clawvault.sh provider setup git        ← any Git repo"
-  echo "  clawvault.sh provider setup ftp        ← FTP/SFTP server"
-  echo "  clawvault.sh provider setup s3         ← S3 bucket"
-  echo "  clawvault.sh provider setup local      ← USB/NAS"
+  echo "  clawroam.sh provider setup cloud      ← managed, easiest"
+  echo "  clawroam.sh provider setup gdrive     ← Google Drive"
+  echo "  clawroam.sh provider setup dropbox    ← Dropbox"
+  echo "  clawroam.sh provider setup git        ← any Git repo"
+  echo "  clawroam.sh provider setup ftp        ← FTP/SFTP server"
+  echo "  clawroam.sh provider setup s3         ← S3 bucket"
+  echo "  clawroam.sh provider setup local      ← USB/NAS"
   echo ""
 }
 
@@ -146,7 +146,7 @@ YAML
 
 cmd_status() {
   if [[ ! -f "$CONFIG" ]]; then
-    echo "ClawVault not initialized. Run: clawvault.sh init"
+    echo "ClawRoam not initialized. Run: clawroam.sh init"
     return 1
   fi
 
@@ -178,7 +178,7 @@ cmd_cloud() {
 
 cmd_profile() {
   if [[ ! -f "$CONFIG" ]]; then
-    echo "ClawVault not initialized. Run: clawvault.sh init"
+    echo "ClawRoam not initialized. Run: clawroam.sh init"
     return 1
   fi
 
@@ -190,7 +190,7 @@ cmd_profile() {
     rename)
       local new_name="${2:-}"
       if [[ -z "$new_name" ]]; then
-        echo "Usage: clawvault.sh profile rename <name>"
+        echo "Usage: clawroam.sh profile rename <name>"
         return 1
       fi
       if [[ ! "$new_name" =~ ^[a-zA-Z0-9_-]{1,64}$ ]]; then
@@ -211,21 +211,21 @@ cmd_profile() {
         echo "No provider configured."
         return 1
       fi
-      CLAWVAULT_PROFILE="$(get_profile_name)" bash "$PROVIDERS_DIR/${provider}.sh" list-profiles
+      CLAWROAM_PROFILE="$(get_profile_name)" bash "$PROVIDERS_DIR/${provider}.sh" list-profiles
       ;;
     pull)
       local target="${2:-}"
       if [[ -z "$target" ]]; then
-        echo "Usage: clawvault.sh profile pull <name>"
-        echo "Use 'clawvault.sh profile list' to see available profiles."
+        echo "Usage: clawroam.sh profile pull <name>"
+        echo "Use 'clawroam.sh profile list' to see available profiles."
         return 1
       fi
       log "Pulling profile: $target"
-      CLAWVAULT_PROFILE="$target" bash "$SRC_DIR/sync-engine.sh" pull
+      CLAWROAM_PROFILE="$target" bash "$SRC_DIR/sync-engine.sh" pull
       log "Restored profile: $target"
       ;;
     *)
-      echo "Usage: clawvault.sh profile {show|rename|list|pull}"
+      echo "Usage: clawroam.sh profile {show|rename|list|pull}"
       ;;
   esac
 }
@@ -234,13 +234,13 @@ cmd_profile() {
 
 cmd_help() {
   echo ""
-  echo "🦞 ClawVault v$VERSION — Portable Agent Environment"
+  echo "🦞 ClawRoam v$VERSION — Portable Agent Environment"
   echo ""
   echo "Setup:"
   echo "  init                    Initialize vault on this machine"
   echo "  provider setup <name>   Configure storage (cloud/gdrive/dropbox/ftp/git/s3/local)"
   echo "  provider list           Show available providers"
-  echo "  cloud signup            Quick setup for ClawVault Cloud"
+  echo "  cloud signup            Quick setup for ClawRoam Cloud"
   echo ""
   echo "Sync:"
   echo "  sync start              Start auto-sync (iCloud-like)"
@@ -302,7 +302,7 @@ case "${1:-help}" in
       push)   bash "$SRC_DIR/sync-engine.sh" push ;;
       pull)   bash "$SRC_DIR/sync-engine.sh" pull ;;
       status) bash "$SRC_DIR/sync-engine.sh" status ;;
-      *)      echo "Usage: clawvault.sh sync {start|stop|push|pull|status}" ;;
+      *)      echo "Usage: clawroam.sh sync {start|stop|push|pull|status}" ;;
     esac ;;
 
   # History

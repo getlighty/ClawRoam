@@ -32,7 +32,7 @@ export async function ensureSubscription(
   const subscription = await stripe.subscriptions.create({
     customer: customerId,
     items: [{ price: process.env.STRIPE_PRICE_ID }],
-    metadata: { purpose: "clawvault-storage" },
+    metadata: { purpose: "clawroam-storage" },
   });
   return subscription.id;
 }

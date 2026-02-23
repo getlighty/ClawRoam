@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# ClawVault — Provider Manager
+# ClawRoam — Provider Manager
 # Routes to provider-specific scripts and manages provider config
 # Usage: provider.sh {setup|list|test|info} [provider_name]
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROVIDERS_DIR="$SCRIPT_DIR/../providers"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault:provider $(timestamp)] $*"; }
+log() { echo "[clawroam:provider $(timestamp)] $*"; }
 
 cmd_list() {
   echo ""
   echo "Available Storage Providers"
   echo "==========================="
   echo ""
-  echo "  cloud     ClawVault Cloud (managed, 50 MB free)"
+  echo "  cloud     ClawRoam Cloud (managed, 50 MB free)"
   echo "  gdrive    Google Drive (via rclone)"
   echo "  dropbox   Dropbox (via rclone)"
   echo "  ftp       FTP/SFTP server (via rsync+ssh)"
@@ -27,7 +27,7 @@ cmd_list() {
   echo "  webdav    WebDAV (Nextcloud, etc., via rclone)"
   echo "  local     Local directory (USB/NAS mount)"
   echo ""
-  echo "Setup: clawvault.sh provider setup <name>"
+  echo "Setup: clawroam.sh provider setup <name>"
   echo ""
 }
 
@@ -35,7 +35,7 @@ cmd_setup() {
   local provider="${1:-}"
 
   if [[ -z "$provider" ]]; then
-    echo "Usage: clawvault.sh provider setup <name>"
+    echo "Usage: clawroam.sh provider setup <name>"
     cmd_list
     return 1
   fi
@@ -48,7 +48,7 @@ cmd_setup() {
   fi
 
   if [[ ! -f "$CONFIG" ]]; then
-    log "Vault not initialized. Run 'clawvault.sh init' first."
+    log "Vault not initialized. Run 'clawroam.sh init' first."
     return 1
   fi
 

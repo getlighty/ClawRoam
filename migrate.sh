@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# ClawVault — Migration Wizard
+# ClawRoam — Migration Wizard
 # Interactive restore/migration for new machines
 # Usage: migrate.sh {pull|push-identity|status}
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault:migrate $(timestamp)] $*"; }
+log() { echo "[clawroam:migrate $(timestamp)] $*"; }
 
 # ─── Pull (restore to this machine) ─────────────────────────
 
 cmd_pull() {
   if [[ ! -f "$CONFIG" ]]; then
-    log "Vault not initialized. Run 'clawvault.sh init' first."
+    log "Vault not initialized. Run 'clawroam.sh init' first."
     return 1
   fi
 
@@ -24,12 +24,12 @@ cmd_pull() {
   provider=$(grep '^provider:' "$CONFIG" 2>/dev/null | awk '{print $2}' | tr -d '"')
 
   if [[ -z "$provider" ]]; then
-    log "No provider configured. Run 'clawvault.sh provider setup <name>' first."
+    log "No provider configured. Run 'clawroam.sh provider setup <name>' first."
     return 1
   fi
 
   echo ""
-  echo "ClawVault Migration — Pull"
+  echo "ClawRoam Migration — Pull"
   echo "=========================="
   echo ""
   echo "This will:"
@@ -61,7 +61,7 @@ cmd_pull() {
   # Step 1: Pull from provider
   echo ""
   log "Step 1/4: Pulling profile '$chosen' from $provider..."
-  CLAWVAULT_PROFILE="$chosen" bash "$SCRIPT_DIR/src/sync-engine.sh" pull
+  CLAWROAM_PROFILE="$chosen" bash "$SCRIPT_DIR/src/sync-engine.sh" pull
 
   # Step 2: Show what was restored
   echo ""
@@ -190,7 +190,7 @@ cmd_push_identity() {
 
 cmd_status() {
   if [[ ! -f "$CONFIG" ]]; then
-    echo "ClawVault not initialized."
+    echo "ClawRoam not initialized."
     return 1
   fi
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# ClawVault Provider — S3-compatible storage (via rclone)
+# ClawRoam Provider — S3-compatible storage (via rclone)
 set -euo pipefail
-VAULT_DIR="$HOME/.clawvault"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-s3.json"
-RCLONE_REMOTE="clawvault-s3"
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawvault:s3 $(timestamp)] $*"; }
+VAULT_DIR="$HOME/.clawroam"; CONFIG="$VAULT_DIR/config.yaml"; PROVIDER_CONFIG="$VAULT_DIR/.provider-s3.json"
+RCLONE_REMOTE="clawroam-s3"
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }; log() { echo "[clawroam:s3 $(timestamp)] $*"; }
 
 ensure_rclone() {
   if ! command -v rclone &>/dev/null; then
@@ -15,7 +15,7 @@ ensure_rclone() {
 EXCLUDE="--exclude local/** --exclude keys/** --exclude .provider-*.json --exclude .cloud-provider.json --exclude .sync-* --exclude .pull-* --exclude .heartbeat.pid --exclude .git-local/** --exclude .git/**"
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
@@ -28,7 +28,7 @@ cmd_setup() {
   read -rp "Access Key ID: " access_key
   read -rsp "Secret Access Key: " secret_key; echo ""
   read -rp "Region [us-east-1]: " region; region="${region:-us-east-1}"
-  read -rp "Path prefix [clawvault]: " prefix; prefix="${prefix:-clawvault}"
+  read -rp "Path prefix [clawroam]: " prefix; prefix="${prefix:-clawroam}"
 
   if [[ -z "$bucket" || -z "$access_key" || -z "$secret_key" ]]; then
     log "Bucket, access key, and secret key are required."; return 1

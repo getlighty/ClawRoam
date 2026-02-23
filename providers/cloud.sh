@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
-# ClawVault Cloud Provider — Managed storage with pay-per-MB pricing
+# ClawRoam Cloud Provider — Managed storage with pay-per-MB pricing
 # Pricing: first 50 MB free, $0.005/MB/month after that
 # Usage: cloud.sh {setup|push|pull|test|info|usage}
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 KEY_DIR="$VAULT_DIR/keys"
 CLOUD_CONFIG="$VAULT_DIR/.cloud-provider.json"
-API_BASE="https://clawvault-api.ovisoftblue.workers.dev/v1"
+API_BASE="https://clawroam-api.ovisoftblue.workers.dev/v1"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault:cloud $(timestamp)] $*"; }
+log() { echo "[clawroam:cloud $(timestamp)] $*"; }
 
 # Use --http1.1 to avoid HTTP/2 protocol errors on some systems
 CURL="curl --http1.1"
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
 }
 
 get_public_key() {
-  cat "$KEY_DIR/clawvault_ed25519.pub" 2>/dev/null
+  cat "$KEY_DIR/clawroam_ed25519.pub" 2>/dev/null
 }
 
 get_private_key() {
-  echo "$KEY_DIR/clawvault_ed25519"
+  echo "$KEY_DIR/clawroam_ed25519"
 }
 
 # Sign a request payload with the private key
@@ -44,7 +44,7 @@ sign_request() {
 
 cmd_setup() {
   echo ""
-  echo "☁️  ClawVault Cloud Setup"
+  echo "☁️  ClawRoam Cloud Setup"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
   echo "Pricing:"
@@ -79,7 +79,7 @@ cmd_setup() {
   local hostname_str
   hostname_str=$(hostname -s 2>/dev/null || echo "unknown")
 
-  log "Registering with ClawVault Cloud..."
+  log "Registering with ClawRoam Cloud..."
 
   # Register with the API
   local response
@@ -98,7 +98,7 @@ cmd_setup() {
 {
   "provider": "cloud",
   "email": "$email",
-  "public_key_fingerprint": "$(ssh-keygen -lf "$KEY_DIR/clawvault_ed25519.pub" 2>/dev/null | awk '{print $2}')",
+  "public_key_fingerprint": "$(ssh-keygen -lf "$KEY_DIR/clawroam_ed25519.pub" 2>/dev/null | awk '{print $2}')",
   "hostname": "$hostname_str",
   "registered": "$(timestamp)",
   "api_base": "$API_BASE",
@@ -107,7 +107,7 @@ cmd_setup() {
 }
 JSON
     echo ""
-    log "✓ Cloud config saved. You'll be notified when ClawVault Cloud launches."
+    log "✓ Cloud config saved. You'll be notified when ClawRoam Cloud launches."
     log "  In the meantime, you can use any other provider (gdrive, dropbox, git, etc.)"
     return 0
   }
@@ -121,7 +121,7 @@ JSON
   "provider": "cloud",
   "email": "$email",
   "vault_id": "$vault_id",
-  "public_key_fingerprint": "$(ssh-keygen -lf "$KEY_DIR/clawvault_ed25519.pub" 2>/dev/null | awk '{print $2}')",
+  "public_key_fingerprint": "$(ssh-keygen -lf "$KEY_DIR/clawroam_ed25519.pub" 2>/dev/null | awk '{print $2}')",
   "hostname": "$hostname_str",
   "api_base": "$API_BASE",
   "registered": "$(timestamp)",
@@ -129,7 +129,7 @@ JSON
 }
 JSON
 
-  log "✓ Registered with ClawVault Cloud"
+  log "✓ Registered with ClawRoam Cloud"
   log "  Vault ID: $vault_id"
   log "  Email:    $email"
   log "  Storage:  50 MB free included"
@@ -168,7 +168,7 @@ cmd_push() {
   local encrypted="${archive}.enc"
   openssl enc -aes-256-cbc -pbkdf2 -salt \
     -in "$archive" -out "$encrypted" \
-    -pass "file:$KEY_DIR/clawvault_ed25519" 2>/dev/null
+    -pass "file:$KEY_DIR/clawroam_ed25519" 2>/dev/null
   mv "$encrypted" "$archive"
 
   local size_bytes
@@ -178,7 +178,7 @@ cmd_push() {
 
   local profile_name
   profile_name=$(get_profile_name)
-  log "Pushing to ClawVault Cloud ($size_mb MB, profile: $profile_name, encrypted)..."
+  log "Pushing to ClawRoam Cloud ($size_mb MB, profile: $profile_name, encrypted)..."
 
   # Sign the encrypted archive hash for authentication
   local archive_hash
@@ -191,8 +191,8 @@ cmd_push() {
   local http_code
   http_code=$($CURL -sf -o /dev/null -w "%{http_code}" \
     -X PUT "$API_BASE/vaults/$vault_id/profiles/$profile_name/sync" \
-    -H "X-ClawVault-Signature: $signature" \
-    -H "X-ClawVault-Hash: $archive_hash" \
+    -H "X-ClawRoam-Signature: $signature" \
+    -H "X-ClawRoam-Hash: $archive_hash" \
     -H "Content-Type: application/gzip" \
     --data-binary "@$archive" 2>/dev/null) || http_code="000"
 
@@ -230,11 +230,11 @@ cmd_pull() {
 
   local profile_name
   profile_name=$(get_profile_name)
-  log "Pulling from ClawVault Cloud (profile: $profile_name)..."
+  log "Pulling from ClawRoam Cloud (profile: $profile_name)..."
 
   $CURL -sf -o "$archive" \
-    -H "X-ClawVault-Signature: $signature" \
-    -H "X-ClawVault-Timestamp: $ts_now" \
+    -H "X-ClawRoam-Signature: $signature" \
+    -H "X-ClawRoam-Timestamp: $ts_now" \
     "$API_BASE/vaults/$vault_id/profiles/$profile_name/sync" 2>/dev/null || {
     log "Cloud API not available or vault not found."
     return 1
@@ -245,7 +245,7 @@ cmd_pull() {
     local decrypted="${archive}.dec"
     openssl enc -d -aes-256-cbc -pbkdf2 \
       -in "$archive" -out "$decrypted" \
-      -pass "file:$KEY_DIR/clawvault_ed25519" 2>/dev/null
+      -pass "file:$KEY_DIR/clawroam_ed25519" 2>/dev/null
     if [[ -f "$decrypted" && -s "$decrypted" ]]; then
       mv "$decrypted" "$archive"
     fi
@@ -295,7 +295,7 @@ cmd_test() {
     return 1
   fi
 
-  log "Testing ClawVault Cloud connection..."
+  log "Testing ClawRoam Cloud connection..."
 
   local status
   status=$($CURL -sf -o /dev/null -w "%{http_code}" "$API_BASE/health" 2>/dev/null) || status="000"
@@ -349,7 +349,7 @@ print(f'  Instances:     {d.get(\"instance_count\", \"?\")}')" 2>/dev/null
     cost=$(echo "scale=2; $billable * 0.005" | bc 2>/dev/null || echo "0.00")
 
     echo ""
-    echo "☁️  ClawVault Cloud — Estimated Usage"
+    echo "☁️  ClawRoam Cloud — Estimated Usage"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Local vault:   ~${local_size} MB"
     echo "  Free tier:     50 MB"
@@ -393,8 +393,8 @@ cmd_list_profiles() {
 
   local response
   response=$($CURL -sf \
-    -H "X-ClawVault-Signature: $signature" \
-    -H "X-ClawVault-Timestamp: $ts_now" \
+    -H "X-ClawRoam-Signature: $signature" \
+    -H "X-ClawRoam-Timestamp: $ts_now" \
     "$API_BASE/vaults/$vault_id/profiles" 2>/dev/null) || response=""
 
   local current_profile

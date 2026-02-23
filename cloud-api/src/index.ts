@@ -19,7 +19,7 @@ async function authenticateVault(
   payload: string
 ): Promise<{ ok: true; fingerprint: string } | { ok: false; error: string }> {
   if (!signature) {
-    return { ok: false, error: "Missing X-ClawVault-Signature header" };
+    return { ok: false, error: "Missing X-ClawRoam-Signature header" };
   }
 
   const vault = await db.getVault(vaultId);
@@ -94,8 +94,8 @@ app.post("/v1/signup", async (c) => {
 
 app.put("/v1/vaults/:id/sync", async (c) => {
   const vaultId = c.req.param("id");
-  const signature = c.req.header("X-ClawVault-Signature");
-  const archiveHash = c.req.header("X-ClawVault-Hash") || "";
+  const signature = c.req.header("X-ClawRoam-Signature");
+  const archiveHash = c.req.header("X-ClawRoam-Hash") || "";
 
   const auth = await authenticateVault(vaultId, signature, archiveHash);
   if (!auth.ok) return c.json({ error: auth.error }, 401);
@@ -157,8 +157,8 @@ app.put("/v1/vaults/:id/sync", async (c) => {
 
 app.get("/v1/vaults/:id/sync", async (c) => {
   const vaultId = c.req.param("id");
-  const signature = c.req.header("X-ClawVault-Signature");
-  const timestamp = c.req.header("X-ClawVault-Timestamp") || "";
+  const signature = c.req.header("X-ClawRoam-Signature");
+  const timestamp = c.req.header("X-ClawRoam-Timestamp") || "";
 
   const auth = await authenticateVault(
     vaultId,
@@ -180,8 +180,8 @@ app.get("/v1/vaults/:id/sync", async (c) => {
   return new Response(Buffer.from(data), {
     headers: {
       "Content-Type": "application/gzip",
-      "X-ClawVault-Hash": latest.hash_sha256,
-      "X-ClawVault-Version": latest.id,
+      "X-ClawRoam-Hash": latest.hash_sha256,
+      "X-ClawRoam-Version": latest.id,
     },
   });
 });
@@ -190,8 +190,8 @@ app.get("/v1/vaults/:id/sync", async (c) => {
 
 app.get("/v1/vaults/:id/usage", async (c) => {
   const vaultId = c.req.param("id");
-  const signature = c.req.header("X-ClawVault-Signature");
-  const timestamp = c.req.header("X-ClawVault-Timestamp") || "";
+  const signature = c.req.header("X-ClawRoam-Signature");
+  const timestamp = c.req.header("X-ClawRoam-Timestamp") || "";
 
   const auth = await authenticateVault(
     vaultId,
@@ -216,7 +216,7 @@ app.get("/v1/vaults/:id/usage", async (c) => {
 
 app.post("/v1/vaults/:id/keys", async (c) => {
   const vaultId = c.req.param("id");
-  const signature = c.req.header("X-ClawVault-Signature");
+  const signature = c.req.header("X-ClawRoam-Signature");
   const body: RegisterKeyRequest = await c.req.json();
 
   if (!body.public_key) {
@@ -254,7 +254,7 @@ app.post("/v1/vaults/:id/keys", async (c) => {
 app.delete("/v1/vaults/:id/keys/:fp", async (c) => {
   const vaultId = c.req.param("id");
   const fp = decodeURIComponent(c.req.param("fp"));
-  const signature = c.req.header("X-ClawVault-Signature");
+  const signature = c.req.header("X-ClawRoam-Signature");
 
   const auth = await authenticateVault(
     vaultId,
@@ -281,5 +281,5 @@ app.delete("/v1/vaults/:id/keys/:fp", async (c) => {
 const port = parseInt(process.env.PORT || "3000", 10);
 
 await db.migrate();
-console.log(`ClawVault Cloud API listening on :${port}`);
+console.log(`ClawRoam Cloud API listening on :${port}`);
 serve({ fetch: app.fetch, port });

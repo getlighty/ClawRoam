@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# ClawVault Provider — Google Drive
+# ClawRoam Provider — Google Drive
 # Uses rclone for OAuth + sync
 # Usage: gdrive.sh {setup|push|pull|test|info}
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 PROVIDER_CONFIG="$VAULT_DIR/.provider-gdrive.json"
-RCLONE_REMOTE="clawvault-gdrive"
-REMOTE_DIR="ClawVault"
+RCLONE_REMOTE="clawroam-gdrive"
+REMOTE_DIR="ClawRoam"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "[clawvault:gdrive $(timestamp)] $*"; }
+log() { echo "[clawroam:gdrive $(timestamp)] $*"; }
 
 EXCLUDE="--exclude local/** --exclude keys/** --exclude .provider-*.json --exclude .cloud-provider.json --exclude .sync-* --exclude .pull-* --exclude .heartbeat.pid --exclude .git-local/** --exclude .git/**"
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"

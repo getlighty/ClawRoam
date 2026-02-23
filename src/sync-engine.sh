@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# ClawVault — Sync Engine
+# ClawRoam — Sync Engine
 # iCloud-like auto-sync: watches for changes, auto-commits to local git,
 # auto-pushes to provider. Full history with rollback.
 # Usage: sync-engine.sh {start|stop|push|pull|log|diff|rollback|status}
 
 set -euo pipefail
 
-VAULT_DIR="$HOME/.clawvault"
+VAULT_DIR="$HOME/.clawroam"
 CONFIG="$VAULT_DIR/config.yaml"
 SYNC_LOG="$VAULT_DIR/sync.log"
 PID_FILE="$VAULT_DIR/.sync-engine.pid"
@@ -29,7 +29,7 @@ get_sync_interval() {
 }
 
 get_profile_name() {
-  if [[ -n "${CLAWVAULT_PROFILE:-}" ]]; then echo "$CLAWVAULT_PROFILE"; return; fi
+  if [[ -n "${CLAWROAM_PROFILE:-}" ]]; then echo "$CLAWROAM_PROFILE"; return; fi
   local name
   name=$(grep 'profile_name:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   echo "${name:-$(hostname -s 2>/dev/null || echo default)}"
@@ -82,7 +82,7 @@ auto_commit() {
   hostname_str=$(hostname -s 2>/dev/null || echo "unknown")
 
   git commit -m "auto: $changed" \
-    --author="clawvault <vault@${hostname_str}>" \
+    --author="clawroam <vault@${hostname_str}>" \
     --quiet 2>/dev/null
 
   log "Committed: $changed"
@@ -117,7 +117,7 @@ do_push() {
   profile_name=$(get_profile_name)
   local provider_script="$PROVIDERS_DIR/${provider}.sh"
   if [[ -f "$provider_script" ]]; then
-    CLAWVAULT_PROFILE="$profile_name" bash "$provider_script" push
+    CLAWROAM_PROFILE="$profile_name" bash "$provider_script" push
     log "✓ Pushed to $provider (profile: $profile_name)"
   else
     log "Provider script not found: $provider"
@@ -140,7 +140,7 @@ do_pull() {
   profile_name=$(get_profile_name)
   local provider_script="$PROVIDERS_DIR/${provider}.sh"
   if [[ -f "$provider_script" ]]; then
-    CLAWVAULT_PROFILE="$profile_name" bash "$provider_script" pull
+    CLAWROAM_PROFILE="$profile_name" bash "$provider_script" pull
     auto_commit || true
     sync_to_openclaw
     log "✓ Pulled from $provider (profile: $profile_name)"
@@ -292,12 +292,12 @@ cmd_stop() {
     kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
     pkill -P "$pid" 2>/dev/null || true
     # Also kill any orphaned fswatch watching our vault
-    pkill -f "fswatch.*clawvault" 2>/dev/null || true
+    pkill -f "fswatch.*clawroam" 2>/dev/null || true
     rm -f "$PID_FILE"
     log "✓ Sync engine stopped"
   else
     # Clean up orphans even without PID file
-    pkill -f "fswatch.*clawvault" 2>/dev/null || true
+    pkill -f "fswatch.*clawroam" 2>/dev/null || true
     log "Not running"
   fi
 }
