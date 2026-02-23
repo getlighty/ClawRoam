@@ -164,6 +164,13 @@ cmd_push() {
   # Create archive
   tar -czf "$archive" -C "$sync_dir" . 2>/dev/null
 
+  # Encrypt archive with AES-256-CBC using private key as passphrase
+  local encrypted="${archive}.enc"
+  openssl enc -aes-256-cbc -pbkdf2 -salt \
+    -in "$archive" -out "$encrypted" \
+    -pass "file:$KEY_DIR/clawvault_ed25519" 2>/dev/null
+  mv "$encrypted" "$archive"
+
   local size_bytes
   size_bytes=$(wc -c < "$archive" | tr -d ' ')
   local size_mb
@@ -171,9 +178,9 @@ cmd_push() {
 
   local profile_name
   profile_name=$(get_profile_name)
-  log "Pushing to ClawVault Cloud ($size_mb MB, profile: $profile_name)..."
+  log "Pushing to ClawVault Cloud ($size_mb MB, profile: $profile_name, encrypted)..."
 
-  # Sign the archive hash for authentication
+  # Sign the encrypted archive hash for authentication
   local archive_hash
   archive_hash=$(shasum -a 256 "$archive" 2>/dev/null || sha256sum "$archive" | awk '{print $1}')
   archive_hash=$(echo "$archive_hash" | awk '{print $1}')
@@ -234,15 +241,34 @@ cmd_pull() {
   }
 
   if [[ -f "$archive" && -s "$archive" ]]; then
+    # Decrypt the archive
+    local decrypted="${archive}.dec"
+    openssl enc -d -aes-256-cbc -pbkdf2 \
+      -in "$archive" -out "$decrypted" \
+      -pass "file:$KEY_DIR/clawvault_ed25519" 2>/dev/null
+    if [[ -f "$decrypted" && -s "$decrypted" ]]; then
+      mv "$decrypted" "$archive"
+    fi
+    # (if decryption fails, archive might be unencrypted — legacy compat)
+
     # Extract to staging, then merge (don't overwrite local/)
     local pull_dir="$VAULT_DIR/.pull-staging"
     mkdir -p "$pull_dir"
     tar -xzf "$archive" -C "$pull_dir" 2>/dev/null
 
-    # Merge — pull_dir wins for shared files, local/ stays untouched
-    for f in identity/USER.md knowledge/MEMORY.md requirements.yaml manifest.json identity/instances.yaml; do
+    # Restore entire openclaw directory if present
+    if [[ -d "$pull_dir/openclaw" ]]; then
+      local openclaw_dir
+      openclaw_dir=$(grep 'openclaw_dir:' "$CONFIG" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+      if [[ -n "$openclaw_dir" ]]; then
+        mkdir -p "$openclaw_dir"
+        rsync -a --exclude '.git/' --exclude 'node_modules/' "$pull_dir/openclaw/" "$openclaw_dir/" 2>/dev/null || true
+      fi
+    fi
+
+    # Also restore vault-level files
+    for f in requirements.yaml manifest.json config.yaml skills-manifest.yaml; do
       if [[ -f "$pull_dir/$f" ]]; then
-        mkdir -p "$(dirname "$VAULT_DIR/$f")"
         cp "$pull_dir/$f" "$VAULT_DIR/$f"
       fi
     done

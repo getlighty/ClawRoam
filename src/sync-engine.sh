@@ -157,26 +157,14 @@ sync_from_openclaw() {
     return 0
   fi
 
-  # Pull syncable files from openclaw workspace to vault
-  local ws="$openclaw_dir/workspace"
-  [[ -f "$ws/USER.md" ]]   && cp "$ws/USER.md"   "$VAULT_DIR/identity/USER.md"
-  [[ -f "$ws/MEMORY.md" ]] && cp "$ws/MEMORY.md"  "$VAULT_DIR/knowledge/MEMORY.md"
-
-  if [[ -d "$ws/memory/projects" ]]; then
-    mkdir -p "$VAULT_DIR/knowledge/projects"
-    rsync -a "$ws/memory/projects/" "$VAULT_DIR/knowledge/projects/" 2>/dev/null || true
-  fi
-
-  # Generate skills manifest
-  if [[ -d "$openclaw_dir/skills" ]]; then
-    ls -1 "$openclaw_dir/skills/" 2>/dev/null | while read -r skill; do
-      local version=""
-      [[ -f "$openclaw_dir/skills/$skill/SKILL.md" ]] && \
-        version=$(grep '^version:' "$openclaw_dir/skills/$skill/SKILL.md" 2>/dev/null | head -1 | awk '{print $2}')
-      echo "- name: $skill"
-      echo "  version: \"${version:-unknown}\""
-    done > "$VAULT_DIR/skills-manifest.yaml" 2>/dev/null || true
-  fi
+  # Mirror entire openclaw directory into vault (excluding .git and runtime files)
+  mkdir -p "$VAULT_DIR/openclaw"
+  rsync -a --delete \
+    --exclude '.git/' \
+    --exclude 'node_modules/' \
+    --exclude '*.swp' \
+    --exclude '*.swo' \
+    "$openclaw_dir/" "$VAULT_DIR/openclaw/" 2>/dev/null || true
 }
 
 sync_to_openclaw() {
@@ -187,9 +175,13 @@ sync_to_openclaw() {
     return 0
   fi
 
-  local ws="$openclaw_dir/workspace"
-  [[ -f "$VAULT_DIR/identity/USER.md" ]]   && cp "$VAULT_DIR/identity/USER.md"   "$ws/USER.md" 2>/dev/null || true
-  [[ -f "$VAULT_DIR/knowledge/MEMORY.md" ]] && cp "$VAULT_DIR/knowledge/MEMORY.md" "$ws/MEMORY.md" 2>/dev/null || true
+  # Mirror vault's openclaw copy back to the actual openclaw directory
+  if [[ -d "$VAULT_DIR/openclaw" ]]; then
+    rsync -a \
+      --exclude '.git/' \
+      --exclude 'node_modules/' \
+      "$VAULT_DIR/openclaw/" "$openclaw_dir/" 2>/dev/null || true
+  fi
 }
 
 # ─── Manifest ─────────────────────────────────────────────────
