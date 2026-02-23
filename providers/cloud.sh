@@ -9,7 +9,7 @@ VAULT_DIR="$HOME/.clawvault"
 CONFIG="$VAULT_DIR/config.yaml"
 KEY_DIR="$VAULT_DIR/keys"
 CLOUD_CONFIG="$VAULT_DIR/.cloud-provider.json"
-API_BASE="https://api.clawvault.dev/v1"
+API_BASE="https://clawvault-api.ovisoftblue.workers.dev/v1"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log() { echo "[clawvault:cloud $(timestamp)] $*"; }
