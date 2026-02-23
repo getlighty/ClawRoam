@@ -4,7 +4,7 @@ description: >
   Portable identity vault for OpenClaw. Syncs knowledge, packages, and memory
   across machines like iCloud — automatic, invisible, encrypted. Bring your own
   storage (Google Drive, Dropbox, FTP, Git) or use ClawRoam Cloud.
-version: 2.0.0
+version: "2.1.0"
 author: getlighty
 license: MIT
 tags:
