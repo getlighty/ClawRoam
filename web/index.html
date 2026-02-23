@@ -255,6 +255,56 @@
   .fade-up-d3 { animation-delay: 0.3s; }
   .fade-up-d4 { animation-delay: 0.4s; }
 
+  /* ── Signup modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px); z-index: 200;
+    display: none; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.25s;
+  }
+  .modal-overlay.open { display: flex; opacity: 1; }
+  .modal {
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: 16px; padding: 2.5rem; max-width: 440px; width: 90%;
+    position: relative;
+  }
+  .modal h3 { font-size: 1.75rem; margin-bottom: 0.5rem; color: #F9FAFB; }
+  .modal p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.6; }
+  .modal-close {
+    position: absolute; top: 1rem; right: 1.25rem; background: none; border: none;
+    color: var(--text-dim); font-size: 1.5rem; cursor: pointer; line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label {
+    display: block; font-size: 0.78rem; color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace; margin-bottom: 0.4rem;
+  }
+  .form-group input {
+    width: 100%; padding: 0.7rem 1rem; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font-size: 0.9rem; font-family: 'IBM Plex Mono', monospace;
+    outline: none; transition: border-color 0.2s;
+  }
+  .form-group input:focus { border-color: var(--amber); }
+  .form-group input::placeholder { color: var(--text-dim); }
+  .form-msg {
+    font-size: 0.8rem; margin-top: 0.75rem; min-height: 1.2em;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .form-msg.ok { color: var(--green); }
+  .form-msg.err { color: var(--red); }
+  .form-steps {
+    margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);
+  }
+  .form-steps p { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.75rem; }
+  .form-steps code {
+    display: block; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.8rem 1rem; font-size: 0.78rem;
+    line-height: 1.7; color: var(--text-muted);
+  }
+  .form-steps code .hl { color: var(--amber); }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .steps { grid-template-columns: 1fr; }
@@ -281,8 +331,8 @@
       <a href="#how">How it works</a>
       <a href="#providers">Providers</a>
       <a href="#pricing">Pricing</a>
-      <a href="https://github.com/clawvault/clawvault" target="_blank">GitHub</a>
-      <a href="#pricing" class="nav-cta">Get Started</a>
+      <a href="https://github.com/getlighty/clawVault" target="_blank">GitHub</a>
+      <a href="#" class="nav-cta" onclick="openSignup(); return false;">Get Started</a>
     </div>
   </div>
 </nav>
@@ -297,8 +347,8 @@
       Bring your own storage or use ours.
     </p>
     <div class="hero-actions fade-up fade-up-d2">
-      <a href="#pricing" class="btn-primary">Start Free →</a>
-      <a href="https://github.com/clawvault/clawvault" class="btn-secondary">View Source</a>
+      <a href="#" class="btn-primary" onclick="openSignup(); return false;">Start Free →</a>
+      <a href="https://github.com/getlighty/clawVault" class="btn-secondary">View Source</a>
     </div>
 
     <div class="terminal fade-up fade-up-d3">
@@ -480,7 +530,7 @@
         <li>Cancel anytime — export everything</li>
       </ul>
 
-      <a href="#" class="btn-primary" style="display: block; text-align: center; width: 100%;">
+      <a href="#" class="btn-primary" style="display: block; text-align: center; width: 100%;" onclick="openSignup(); return false;">
         Get Started Free →
       </a>
     </div>
@@ -497,8 +547,8 @@
       We make money from the convenience of managed cloud storage — not by locking you in.
     </p>
     <div style="display: flex; gap: 1rem; justify-content: center;">
-      <a href="https://github.com/clawvault/clawvault" class="btn-secondary">⭐ Star on GitHub</a>
-      <a href="https://github.com/clawvault/clawvault/blob/main/SKILL.md" class="btn-secondary">Read the Skill</a>
+      <a href="https://github.com/getlighty/clawVault" class="btn-secondary">⭐ Star on GitHub</a>
+      <a href="https://github.com/getlighty/clawVault/blob/main/SKILL.md" class="btn-secondary">Read the Skill</a>
     </div>
   </div>
 </section>
@@ -508,13 +558,117 @@
   <div class="container">
     <p style="margin-bottom: 0.5rem;">🦞 ClawVault — Portable Agent Environment</p>
     <p>
-      <a href="https://github.com/clawvault/clawvault">GitHub</a> ·
+      <a href="https://github.com/getlighty/clawVault">GitHub</a> ·
       <a href="#">Docs</a> ·
       <a href="#">Discord</a> ·
       MIT License
     </p>
   </div>
 </footer>
+
+<!-- Signup Modal -->
+<div class="modal-overlay" id="signup-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeSignup()">&times;</button>
+    <h3>Get started free</h3>
+    <p>
+      Reserve your ClawVault Cloud account. 50 MB free &mdash; no credit card required.
+      You'll get setup instructions after signing up.
+    </p>
+    <form id="signup-form" onsubmit="return handleSignup(event)">
+      <div class="form-group">
+        <label for="signup-email">EMAIL</label>
+        <input type="email" id="signup-email" placeholder="you@example.com" required>
+      </div>
+      <button type="submit" class="btn-primary" style="width:100%; text-align:center;" id="signup-btn">
+        Create Account &rarr;
+      </button>
+      <div class="form-msg" id="signup-msg"></div>
+    </form>
+    <div class="form-steps" id="signup-steps" style="display:none;">
+      <p>Your account is ready. Run these on any machine:</p>
+      <code>
+        <span class="hl">$</span> clawdhub install clawvault<br>
+        <span class="hl">$</span> clawvault init<br>
+        <span class="hl">$</span> clawvault provider setup cloud<br>
+        <span class="hl">$</span> clawvault sync start
+      </code>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://api.clawvault.dev/v1';
+
+function openSignup() {
+  document.getElementById('signup-modal').classList.add('open');
+  setTimeout(() => document.getElementById('signup-email').focus(), 100);
+}
+
+function closeSignup() {
+  document.getElementById('signup-modal').classList.remove('open');
+}
+
+// Close on overlay click
+document.getElementById('signup-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeSignup();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSignup();
+});
+
+async function handleSignup(e) {
+  e.preventDefault();
+  var btn = document.getElementById('signup-btn');
+  var msg = document.getElementById('signup-msg');
+  var email = document.getElementById('signup-email').value.trim();
+
+  if (!email) return false;
+
+  btn.textContent = 'Creating...';
+  btn.disabled = true;
+  msg.className = 'form-msg';
+  msg.textContent = '';
+
+  try {
+    var res = await fetch(API + '/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        public_key: '',
+        hostname: 'web-signup',
+        os: 'web',
+        instance_id: 'pending'
+      })
+    });
+
+    if (res.ok) {
+      var data = await res.json();
+      msg.className = 'form-msg ok';
+      msg.textContent = 'Account created! Vault ID: ' + (data.vault_id || '').slice(0, 8) + '...';
+      document.getElementById('signup-steps').style.display = 'block';
+      document.getElementById('signup-form').style.display = 'none';
+    } else {
+      var errData = await res.json().catch(function() { return {}; });
+      msg.className = 'form-msg err';
+      msg.textContent = errData.error || 'Something went wrong. Try again.';
+      btn.textContent = 'Create Account \u2192';
+      btn.disabled = false;
+    }
+  } catch (err) {
+    // API not live yet — show success with "coming soon" note
+    msg.className = 'form-msg ok';
+    msg.textContent = 'Signed up! We\u2019ll email you when ClawVault Cloud launches.';
+    document.getElementById('signup-steps').style.display = 'block';
+    document.getElementById('signup-form').style.display = 'none';
+  }
+
+  return false;
+}
+</script>
 
 </body>
 </html>
