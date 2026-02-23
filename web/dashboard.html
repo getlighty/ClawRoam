@@ -279,6 +279,31 @@
     font-size: 0.68rem; color: var(--text-dim); flex-shrink: 0;
   }
 
+  /* ── Sync rule checkbox ── */
+  .file-checkbox {
+    width: 15px; height: 15px; flex-shrink: 0;
+    accent-color: var(--amber); cursor: pointer;
+    margin-right: 0.1rem;
+  }
+  .file-row.excluded {
+    opacity: 0.38;
+  }
+  .file-row.excluded .file-name {
+    text-decoration: line-through;
+    text-decoration-color: rgba(255,255,255,0.25);
+  }
+
+  /* ── Excluded badge in profile header ── */
+  .excluded-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem; color: var(--text-dim);
+    padding: 1px 6px; border: 1px solid var(--border);
+    border-radius: 3px; margin-left: 0.5rem;
+  }
+  .excluded-badge.has-exclusions {
+    color: var(--amber); border-color: rgba(217,119,6,0.3);
+  }
+
   /* ── Empty / loading states ── */
   .loading-state, .empty-state {
     display: flex; flex-direction: column;
@@ -466,7 +491,8 @@ var state = {
   token: localStorage.getItem('cs_token') || null,
   vaultId: localStorage.getItem('cs_vault_id') || null,
   email: localStorage.getItem('cs_email') || null,
-  profiles: []
+  profiles: [],
+  syncRules: {}   // profileName → Set of excluded paths
 };
 
 // ═══════════════════════════════════════════════
@@ -535,6 +561,47 @@ function api(method, path, body) {
     }
     return res.json();
   });
+}
+
+// ═══════════════════════════════════════════════
+// SYNC RULES
+// ═══════════════════════════════════════════════
+var syncRulesDebounce = {};
+
+function loadSyncRules(profileName, callback) {
+  api('GET', '/vaults/' + state.vaultId + '/profiles/' + encodeURIComponent(profileName) + '/sync-rules')
+    .then(function(data) {
+      state.syncRules[profileName] = new Set(data.excluded || []);
+      if (callback) callback();
+    })
+    .catch(function() {
+      state.syncRules[profileName] = new Set();
+      if (callback) callback();
+    });
+}
+
+function saveSyncRules(profileName, columnEl) {
+  clearTimeout(syncRulesDebounce[profileName]);
+  syncRulesDebounce[profileName] = setTimeout(function() {
+    var excluded = Array.from(state.syncRules[profileName] || []);
+    api('PUT', '/vaults/' + state.vaultId + '/profiles/' + encodeURIComponent(profileName) + '/sync-rules',
+      { excluded: excluded })
+      .then(function() {
+        showToast('Sync rules saved', 'success');
+        updateExcludedBadge(profileName, columnEl);
+      })
+      .catch(function(err) {
+        showToast('Failed to save rules: ' + err.message, 'error');
+      });
+  }, 500);
+}
+
+function updateExcludedBadge(profileName, columnEl) {
+  var badge = columnEl.querySelector('.excluded-badge');
+  if (!badge) return;
+  var count = (state.syncRules[profileName] || new Set()).size;
+  badge.textContent = count > 0 ? count + ' excluded' : '';
+  badge.className = 'excluded-badge' + (count > 0 ? ' has-exclusions' : '');
 }
 
 // ═══════════════════════════════════════════════
@@ -737,10 +804,13 @@ function createProfileColumn(profile, index) {
   col.style.animationDelay = (index * 0.08) + 's';
   col.setAttribute('data-profile', profile.name);
 
+  var badge = el('span', { className: 'excluded-badge' });
+
   var header = el('div', { className: 'profile-header' }, [
     el('div', { className: 'profile-name' }, [
       el('span', { className: 'dot' }),
-      document.createTextNode(profile.name)
+      document.createTextNode(profile.name),
+      badge
     ]),
     el('div', { className: 'profile-meta' }, [
       el('span', { textContent: formatTime(profile.last_push) }),
@@ -767,6 +837,17 @@ function createProfileColumn(profile, index) {
 function loadProfileFiles(profileName, columnEl) {
   var filesContainer = columnEl.querySelector('.profile-files');
 
+  // Load sync rules first, then files
+  if (!state.syncRules[profileName]) {
+    loadSyncRules(profileName, function() {
+      fetchAndRenderFiles(profileName, columnEl, filesContainer);
+    });
+  } else {
+    fetchAndRenderFiles(profileName, columnEl, filesContainer);
+  }
+}
+
+function fetchAndRenderFiles(profileName, columnEl, filesContainer) {
   api('GET', '/vaults/' + state.vaultId + '/profiles/' + encodeURIComponent(profileName) + '/files')
     .then(function(data) {
       var files = data.files || [];
@@ -796,7 +877,7 @@ function loadProfileFiles(profileName, columnEl) {
         var filesList = el('div', { className: 'category-files' });
 
         catFiles.forEach(function(file) {
-          filesList.appendChild(createFileRow(file, profileName));
+          filesList.appendChild(createFileRow(file, profileName, columnEl));
         });
 
         header.addEventListener('click', function() {
@@ -819,29 +900,58 @@ function loadProfileFiles(profileName, columnEl) {
     });
 }
 
-function createFileRow(file, profileName) {
+function createFileRow(file, profileName, columnEl) {
   var catInfo = getCategoryInfo(file.category);
   var fileName = file.path.split('/').pop();
+  var isExcluded = (state.syncRules[profileName] || new Set()).has(file.path);
 
-  var row = el('div', { className: 'file-row', draggable: true, title: file.path }, [
-    el('span', { className: 'file-icon', textContent: catInfo.icon }),
+  var checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'file-checkbox';
+  checkbox.title = isExcluded ? 'Excluded from sync' : 'Synced';
+  checkbox.checked = !isExcluded;
+
+  var row = el('div', {
+    className: 'file-row' + (isExcluded ? ' excluded' : ''),
+    draggable: true,
+    title: file.path
+  }, [
+    checkbox,
+    el('span', { className: 'file-icon', textContent: isExcluded ? '\uD83D\uDEAB' : catInfo.icon }),
     el('span', { className: 'file-name', textContent: fileName }),
     el('span', { className: 'file-size', textContent: formatFileSize(file.size) })
   ]);
+
   row.setAttribute('data-profile', profileName);
   row.setAttribute('data-filepath', file.path);
   row.setAttribute('data-category', file.category || 'other');
 
-  // Click to preview (only if not dragging)
+  // Checkbox toggle
+  checkbox.addEventListener('change', function(e) {
+    e.stopPropagation();
+    var rules = state.syncRules[profileName] || new Set();
+    if (checkbox.checked) {
+      rules.delete(file.path);
+      row.classList.remove('excluded');
+      row.querySelector('.file-icon').textContent = catInfo.icon;
+    } else {
+      rules.add(file.path);
+      row.classList.add('excluded');
+      row.querySelector('.file-icon').textContent = '\uD83D\uDEAB';
+    }
+    state.syncRules[profileName] = rules;
+    saveSyncRules(profileName, columnEl);
+  });
+
+  // Click to preview (only if not dragging, not on checkbox)
   var wasDragged = false;
   row.addEventListener('mousedown', function() { wasDragged = false; });
   row.addEventListener('mousemove', function() { wasDragged = true; });
   row.addEventListener('click', function(e) {
-    if (e.defaultPrevented || wasDragged) return;
+    if (e.defaultPrevented || wasDragged || e.target === checkbox) return;
     openFileModal(profileName, file);
   });
 
-  // Drag events
   row.addEventListener('dragstart', function(e) { wasDragged = true; handleDragStart(e); });
   row.addEventListener('dragend', handleDragEnd);
 
