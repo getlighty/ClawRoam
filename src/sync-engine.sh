@@ -286,11 +286,16 @@ cmd_stop() {
   if [[ -f "$PID_FILE" ]]; then
     local pid
     pid=$(cat "$PID_FILE")
-    kill "$pid" 2>/dev/null && log "✓ Sync engine stopped" || log "Already stopped"
-    # Kill child processes (fswatch etc)
+    # Kill the process group (catches fswatch + subshells)
+    kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
     pkill -P "$pid" 2>/dev/null || true
+    # Also kill any orphaned fswatch watching our vault
+    pkill -f "fswatch.*clawvault" 2>/dev/null || true
     rm -f "$PID_FILE"
+    log "✓ Sync engine stopped"
   else
+    # Clean up orphans even without PID file
+    pkill -f "fswatch.*clawvault" 2>/dev/null || true
     log "Not running"
   fi
 }
