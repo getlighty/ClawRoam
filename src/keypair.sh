@@ -206,7 +206,7 @@ cmd_verify() {
 
   # Check permissions
   local priv_perms
-  priv_perms=$(stat -f "%OLp" "$PRIVATE_KEY" 2>/dev/null || stat -c "%a" "$PRIVATE_KEY" 2>/dev/null)
+  priv_perms=$(stat -c "%a" "$PRIVATE_KEY" 2>/dev/null || stat -f "%OLp" "$PRIVATE_KEY" 2>/dev/null)
 
   if [[ "$priv_perms" != "600" ]]; then
     log "Private key permissions are $priv_perms (should be 600)"
