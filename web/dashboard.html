@@ -569,6 +569,7 @@ function api(method, path, body) {
 var syncRulesDebounce = {};
 
 function loadSyncRules(profileName, callback) {
+  state.syncRules[profileName] = null;  // sentinel: loading in progress
   api('GET', '/vaults/' + state.vaultId + '/profiles/' + encodeURIComponent(profileName) + '/sync-rules')
     .then(function(data) {
       state.syncRules[profileName] = new Set(data.excluded || []);
@@ -838,13 +839,16 @@ function loadProfileFiles(profileName, columnEl) {
   var filesContainer = columnEl.querySelector('.profile-files');
 
   // Load sync rules first, then files
-  if (!state.syncRules[profileName]) {
+  if (state.syncRules[profileName] === undefined) {
     loadSyncRules(profileName, function() {
       fetchAndRenderFiles(profileName, columnEl, filesContainer);
+      updateExcludedBadge(profileName, columnEl);
     });
-  } else {
+  } else if (state.syncRules[profileName] !== null) {
     fetchAndRenderFiles(profileName, columnEl, filesContainer);
+    updateExcludedBadge(profileName, columnEl);
   }
+  // if null (loading in progress), do nothing — callback will handle it
 }
 
 function fetchAndRenderFiles(profileName, columnEl, filesContainer) {
