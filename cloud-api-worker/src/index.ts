@@ -505,4 +505,26 @@ app.get("/v1/vaults/:id/profiles/:profile/sync-rules", async (c) => {
   return c.json({ excluded: rows.results.map(r => r.path) });
 });
 
+// ─── Sync rules — update ─────────────────────────────────────
+
+app.put("/v1/vaults/:id/profiles/:profile/sync-rules", async (c) => {
+  const vaultId = c.req.param("id");
+  const profileName = c.req.param("profile");
+  const ts = c.req.header("X-ClawRoam-Timestamp") || String(Math.floor(Date.now() / 1000));
+  const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `sync-rules:${vaultId}:${profileName}:${ts}`);
+  if (!a.ok) return c.json({ error: a.error }, 401);
+  const body = await c.req.json<{ excluded: string[] }>();
+  if (!Array.isArray(body.excluded)) return c.json({ error: "excluded must be an array" }, 400);
+  const paths = body.excluded.filter(p => typeof p === "string" && p.length > 0 && p.length < 512);
+  await c.env.DB.prepare(
+    "DELETE FROM sync_rules WHERE vault_id = ? AND profile_name = ?"
+  ).bind(vaultId, profileName).run();
+  for (const path of paths) {
+    await c.env.DB.prepare(
+      "INSERT OR IGNORE INTO sync_rules (id, vault_id, profile_name, path) VALUES (?, ?, ?, ?)"
+    ).bind(crypto.randomUUID(), vaultId, profileName, path).run();
+  }
+  return c.json({ status: "ok", excluded_count: paths.length });
+});
+
 export default app;
