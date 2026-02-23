@@ -14,6 +14,9 @@ API_BASE="https://clawvault-api.ovisoftblue.workers.dev/v1"
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log() { echo "[clawvault:cloud $(timestamp)] $*"; }
 
+# Use --http1.1 to avoid HTTP/2 protocol errors on some systems
+CURL="curl --http1.1"
+
 get_public_key() {
   cat "$KEY_DIR/clawvault_ed25519.pub" 2>/dev/null
 }
@@ -73,7 +76,7 @@ cmd_setup() {
 
   # Register with the API
   local response
-  response=$(curl -sf -X POST "$API_BASE/signup" \
+  response=$($CURL -sf -X POST "$API_BASE/signup" \
     -H "Content-Type: application/json" \
     -d "{
       \"email\": \"$email\",
@@ -169,7 +172,7 @@ cmd_push() {
 
   # Upload
   local http_code
-  http_code=$(curl -sf -o /dev/null -w "%{http_code}" \
+  http_code=$($CURL -sf -o /dev/null -w "%{http_code}" \
     -X PUT "$API_BASE/vaults/$vault_id/sync" \
     -H "X-ClawVault-Signature: $signature" \
     -H "X-ClawVault-Hash: $archive_hash" \
@@ -210,7 +213,7 @@ cmd_pull() {
 
   log "Pulling from ClawVault Cloud..."
 
-  curl -sf -o "$archive" \
+  $CURL -sf -o "$archive" \
     -H "X-ClawVault-Signature: $signature" \
     -H "X-ClawVault-Timestamp: $ts_now" \
     "$API_BASE/vaults/$vault_id/sync" 2>/dev/null || {
@@ -257,7 +260,7 @@ cmd_test() {
   log "Testing ClawVault Cloud connection..."
 
   local status
-  status=$(curl -sf -o /dev/null -w "%{http_code}" "$API_BASE/health" 2>/dev/null) || status="000"
+  status=$($CURL -sf -o /dev/null -w "%{http_code}" "$API_BASE/health" 2>/dev/null) || status="000"
 
   if [[ "$status" == "200" ]]; then
     log "✓ Cloud API reachable"
@@ -281,7 +284,7 @@ cmd_usage() {
 
   # Try API first
   local response
-  response=$(curl -sf "$API_BASE/vaults/$vault_id/usage" 2>/dev/null) || response=""
+  response=$($CURL -sf "$API_BASE/vaults/$vault_id/usage" 2>/dev/null) || response=""
 
   if [[ -n "$response" ]]; then
     log "Cloud Usage:"

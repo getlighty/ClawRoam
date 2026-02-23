@@ -139,7 +139,23 @@ app.post("/v1/signup", async (c) => {
     .prepare("SELECT id FROM vaults WHERE email = ?")
     .bind(body.email)
     .first<{ id: string }>();
-  if (existing) return c.json({ vault_id: existing.id, status: "existing" });
+  if (existing) {
+    // Register new key if provided and not already registered
+    if (body.public_key) {
+      const fp = await computeFingerprintAsync(body.public_key);
+      const dup = await db
+        .prepare("SELECT id FROM vault_keys WHERE vault_id = ? AND fingerprint = ? AND revoked_at IS NULL")
+        .bind(existing.id, fp)
+        .first();
+      if (!dup) {
+        await db
+          .prepare("INSERT INTO vault_keys (id, vault_id, public_key, fingerprint, hostname, instance_id) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(crypto.randomUUID(), existing.id, body.public_key, fp, body.hostname || "", body.instance_id || "")
+          .run();
+      }
+    }
+    return c.json({ vault_id: existing.id, status: "existing" });
+  }
 
   // Create vault
   const vaultId = crypto.randomUUID();
