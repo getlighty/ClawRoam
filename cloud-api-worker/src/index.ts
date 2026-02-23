@@ -118,6 +118,7 @@ async function authenticateVault(
 
 app.get("/v1/health", (c) => c.json({ status: "ok", version: "1.0.0" }));
 
+
 // ─── Signup ──────────────────────────────────────────────────
 
 app.post("/v1/signup", async (c) => {

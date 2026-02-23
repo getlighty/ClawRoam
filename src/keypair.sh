@@ -289,7 +289,7 @@ cmd_sign() {
   tmp_sig=$(mktemp)
   echo -n "$payload" > "$tmp_payload"
   openssl pkeyutl -sign -inkey "$SIGNING_KEY" -rawin -in "$tmp_payload" -out "$tmp_sig" 2>/dev/null
-  base64 -i "$tmp_sig" 2>/dev/null || base64 "$tmp_sig"
+  base64 -w0 "$tmp_sig" 2>/dev/null || base64 -i "$tmp_sig"
   rm -f "$tmp_payload" "$tmp_sig"
 }
 
