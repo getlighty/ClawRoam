@@ -12,6 +12,11 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Node
+node_modules/
+dist/
+.env
+
 # Runtime / test artifacts
 *.pid
 *.log

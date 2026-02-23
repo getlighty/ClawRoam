@@ -25,9 +25,9 @@ get_private_key() {
 # Sign a request payload with the private key
 sign_request() {
   local payload="$1"
-  local privkey
-  privkey=$(get_private_key)
-  echo -n "$payload" | openssl pkeyutl -sign -inkey "$privkey" -rawin 2>/dev/null | base64 -w0 2>/dev/null || base64 2>/dev/null
+  local script_dir
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  bash "$script_dir/../src/keypair.sh" sign "$payload"
 }
 
 # ─── Setup (signup + register key) ───────────────────────────

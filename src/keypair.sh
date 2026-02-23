@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ClawVault — Keypair Management
 # Ed25519 keypair for authenticating with vault providers
-# Usage: keypair.sh {generate|show-public|fingerprint|rotate|verify}
+# Private key in PEM format (openssl-compatible for signing)
+# Public key in SSH format (for display and provider registration)
+# Usage: keypair.sh {generate|show-public|fingerprint|rotate|verify|sign|push-public}
 
 set -euo pipefail
 
@@ -12,6 +14,34 @@ PUBLIC_KEY="$KEY_DIR/clawvault_ed25519.pub"
 
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log() { echo "[clawvault:keys $(timestamp)] $*"; }
+
+# Derive SSH-format public key from PEM private key
+derive_ssh_pubkey() {
+  local privkey="$1" comment="${2:-clawvault}"
+  local pub_der
+  pub_der=$(openssl pkey -in "$privkey" -pubout -outform DER 2>/dev/null | base64)
+  python3 -c "
+import struct, base64, sys
+der = base64.b64decode('$pub_der')
+raw_pub = der[-32:]
+key_type = b'ssh-ed25519'
+blob = struct.pack('>I', len(key_type)) + key_type + struct.pack('>I', len(raw_pub)) + raw_pub
+print(f'ssh-ed25519 {base64.b64encode(blob).decode()} $comment')
+"
+}
+
+# Compute SSH-style fingerprint from the SSH public key file
+ssh_fingerprint() {
+  local pubfile="$1"
+  local key_b64
+  key_b64=$(awk '{print $2}' "$pubfile")
+  python3 -c "
+import base64, hashlib
+data = base64.b64decode('$key_b64')
+fp = base64.b64encode(hashlib.sha256(data).digest()).decode().rstrip('=')
+print(f'SHA256:{fp}')
+"
+}
 
 # ─── Generate ─────────────────────────────────────────────────
 
@@ -27,14 +57,14 @@ cmd_generate() {
 
   log "Generating Ed25519 keypair..."
 
-  # Generate keypair — no passphrase (agent needs unattended access)
-  # Security comes from file permissions + the fact that only this
-  # machine's agent can use it
-  ssh-keygen -t ed25519 \
-    -f "$PRIVATE_KEY" \
-    -N "" \
-    -C "clawvault@$(hostname -s 2>/dev/null || echo unknown)-$(date +%s)" \
-    -q
+  local comment
+  comment="clawvault@$(hostname -s 2>/dev/null || echo unknown)-$(date +%s)"
+
+  # Generate PEM-format Ed25519 private key (openssl-compatible)
+  openssl genpkey -algorithm Ed25519 -out "$PRIVATE_KEY" 2>/dev/null
+
+  # Derive SSH-format public key
+  derive_ssh_pubkey "$PRIVATE_KEY" "$comment" > "$PUBLIC_KEY"
 
   # Lock down permissions
   chmod 700 "$KEY_DIR"
@@ -42,7 +72,7 @@ cmd_generate() {
   chmod 644 "$PUBLIC_KEY"
 
   local fingerprint
-  fingerprint=$(ssh-keygen -lf "$PUBLIC_KEY" 2>/dev/null | awk '{print $2}')
+  fingerprint=$(ssh_fingerprint "$PUBLIC_KEY")
 
   log "✓ Keypair generated"
   log "  Private key: $PRIVATE_KEY (600 — never share this)"
@@ -70,7 +100,7 @@ cmd_show_public() {
   echo ""
 
   local fingerprint
-  fingerprint=$(ssh-keygen -lf "$PUBLIC_KEY" 2>/dev/null | awk '{print $2}')
+  fingerprint=$(ssh_fingerprint "$PUBLIC_KEY")
   echo "Fingerprint: $fingerprint"
   echo ""
 }
@@ -82,7 +112,9 @@ cmd_fingerprint() {
     log "No keypair found."
     return 1
   fi
-  ssh-keygen -lf "$PUBLIC_KEY" 2>/dev/null
+  local fp
+  fp=$(ssh_fingerprint "$PUBLIC_KEY")
+  echo "$fp"
 }
 
 # ─── Rotate ───────────────────────────────────────────────────
@@ -145,45 +177,49 @@ cmd_verify() {
     issues=$((issues + 1))
   fi
 
-  # Verify key pair matches
-  local priv_pub pub_pub
-  priv_pub=$(ssh-keygen -yf "$PRIVATE_KEY" 2>/dev/null)
-  pub_pub=$(cat "$PUBLIC_KEY" 2>/dev/null)
+  # Verify key pair matches by deriving public from private and comparing
+  local derived_pub stored_pub
+  derived_pub=$(derive_ssh_pubkey "$PRIVATE_KEY" "verify-check" | awk '{print $2}')
+  stored_pub=$(awk '{print $2}' "$PUBLIC_KEY")
 
-  if [[ "$priv_pub" != "$pub_pub" ]]; then
+  if [[ "$derived_pub" != "$stored_pub" ]]; then
     log "✗ Public key doesn't match private key!"
     issues=$((issues + 1))
   fi
 
   # Test sign/verify
-  local test_file
+  local test_file sig_file pub_pem
   test_file=$(mktemp)
+  sig_file=$(mktemp)
+  pub_pem=$(mktemp)
   echo "clawvault-verify-test" > "$test_file"
+  openssl pkey -in "$PRIVATE_KEY" -pubout -out "$pub_pem" 2>/dev/null
 
-  if ssh-keygen -Y sign -f "$PRIVATE_KEY" -n clawvault "$test_file" &>/dev/null; then
+  if openssl pkeyutl -sign -inkey "$PRIVATE_KEY" -rawin -in "$test_file" -out "$sig_file" 2>/dev/null && \
+     openssl pkeyutl -verify -pubin -inkey "$pub_pem" -rawin -in "$test_file" -sigfile "$sig_file" 2>/dev/null; then
     log "✓ Signing works"
   else
     log "✗ Signing failed"
     issues=$((issues + 1))
   fi
-  rm -f "$test_file" "$test_file.sig"
+  rm -f "$test_file" "$sig_file" "$pub_pem"
 
   if [[ $issues -eq 0 ]]; then
     log "✓ Keypair is healthy"
     local fingerprint
-    fingerprint=$(ssh-keygen -lf "$PUBLIC_KEY" 2>/dev/null | awk '{print $2}')
+    fingerprint=$(ssh_fingerprint "$PUBLIC_KEY")
     log "  Fingerprint: $fingerprint"
   else
     log "✗ $issues issue(s) found"
   fi
 }
 
-# ─── Sign a file (used by sync engine) ───────────────────────
+# ─── Sign (used by cloud.sh and sync engine) ─────────────────
 
 cmd_sign() {
-  local file="${2:-}"
-  if [[ -z "$file" || ! -f "$file" ]]; then
-    log "Usage: keypair.sh sign <file>"
+  local payload="${2:-}"
+  if [[ -z "$payload" ]]; then
+    log "Usage: keypair.sh sign <payload_string>"
     return 1
   fi
 
@@ -192,17 +228,13 @@ cmd_sign() {
     return 1
   fi
 
-  # Create signature
-  openssl pkeyutl -sign \
-    -inkey "$PRIVATE_KEY" \
-    -rawin \
-    -in <(shasum -a 256 "$file" | awk '{print $1}') \
-    2>/dev/null | base64 || {
-    # Fallback: use ssh-keygen signing
-    ssh-keygen -Y sign -f "$PRIVATE_KEY" -n clawvault "$file" 2>/dev/null
-    cat "$file.sig" 2>/dev/null
-    rm -f "$file.sig"
-  }
+  local tmp_payload tmp_sig
+  tmp_payload=$(mktemp)
+  tmp_sig=$(mktemp)
+  echo -n "$payload" > "$tmp_payload"
+  openssl pkeyutl -sign -inkey "$PRIVATE_KEY" -rawin -in "$tmp_payload" -out "$tmp_sig" 2>/dev/null
+  base64 -i "$tmp_sig"
+  rm -f "$tmp_payload" "$tmp_sig"
 }
 
 # ─── Push Public Key ──────────────────────────────────────────
@@ -216,7 +248,7 @@ cmd_push_public() {
   local instance_id hostname_str fingerprint
   instance_id=$(grep 'instance_id:' "$VAULT_DIR/config.yaml" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
   hostname_str=$(hostname -s 2>/dev/null || echo "unknown")
-  fingerprint=$(ssh-keygen -lf "$PUBLIC_KEY" 2>/dev/null | awk '{print $2}')
+  fingerprint=$(ssh_fingerprint "$PUBLIC_KEY")
 
   mkdir -p "$VAULT_DIR/identity/public-keys"
 
