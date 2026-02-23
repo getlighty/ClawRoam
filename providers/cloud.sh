@@ -40,6 +40,30 @@ sign_request() {
   bash "$script_dir/../src/keypair.sh" sign "$payload"
 }
 
+# Fetch per-profile sync exclusions from the server
+# Outputs one excluded path per line; outputs nothing on failure
+fetch_sync_rules() {
+  local vault_id="$1"
+  local profile_name="$2"
+  local ts
+  ts=$(date +%s)
+  local sig
+  sig=$(sign_request "sync-rules:${vault_id}:${profile_name}:${ts}" 2>/dev/null || echo "unsigned")
+  $CURL -sf \
+    -H "X-ClawRoam-Signature: $sig" \
+    -H "X-ClawRoam-Timestamp: $ts" \
+    "$API_BASE/vaults/$vault_id/profiles/$profile_name/sync-rules" 2>/dev/null \
+    | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for p in data.get('excluded', []):
+        print(p)
+except:
+    pass
+" 2>/dev/null || true
+}
+
 # ─── Setup (signup + register key) ───────────────────────────
 
 cmd_setup() {
@@ -149,17 +173,38 @@ cmd_push() {
   local vault_id
   vault_id=$(python3 -c "import json; print(json.load(open('$CLOUD_CONFIG')).get('vault_id',''))" 2>/dev/null || echo "pending")
 
-  # Stage files for upload (exclude local-only files)
+  # Fetch per-profile sync exclusions from server (best-effort, never blocks push)
+  local excluded_paths=()
+  local excluded_count=0
+  local rule
+  while IFS= read -r rule; do
+    if [[ -n "$rule" ]]; then
+      excluded_paths+=("$rule")
+      excluded_count=$((excluded_count + 1))
+    fi
+  done < <(fetch_sync_rules "$vault_id" "$(get_profile_name)" 2>/dev/null || true)
+
+  if [[ "$excluded_count" -gt 0 ]]; then
+    log "Applying $excluded_count sync exclusion(s)..."
+  fi
+
+  # Stage files for upload (exclude local-only files + user exclusions)
   mkdir -p "$sync_dir"
-  rsync -a --delete \
-    --exclude 'local/' \
-    --exclude 'keys/' \
-    --exclude '.cloud-provider.json' \
-    --exclude '.sync-staging/' \
-    --exclude '.sync-archive.tar.gz' \
-    --exclude '.heartbeat.pid' \
-    --exclude '.git-local/' \
-    "$VAULT_DIR/" "$sync_dir/"
+  local rsync_excludes=(
+    '--exclude' 'local/'
+    '--exclude' 'keys/'
+    '--exclude' '.cloud-provider.json'
+    '--exclude' '.sync-staging/'
+    '--exclude' '.sync-archive.tar.gz'
+    '--exclude' '.heartbeat.pid'
+    '--exclude' '.git-local/'
+  )
+  if [[ "$excluded_count" -gt 0 ]]; then
+    for rule in "${excluded_paths[@]}"; do
+      rsync_excludes+=('--exclude' "$rule")
+    done
+  fi
+  rsync -a --delete "${rsync_excludes[@]}" "$VAULT_DIR/" "$sync_dir/"
 
   # Create archive
   tar -czf "$archive" -C "$sync_dir" . 2>/dev/null
