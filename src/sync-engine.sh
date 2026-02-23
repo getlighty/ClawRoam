@@ -131,6 +131,8 @@ do_pull() {
   if [[ -f "$provider_script" ]]; then
     bash "$provider_script" pull
     auto_commit || true
+    # Push pulled data to OpenClaw workspace so it stays in sync
+    sync_to_openclaw
     log "✓ Pulled from $provider"
   fi
 }

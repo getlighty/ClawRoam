@@ -41,29 +41,29 @@ cmd_push() {
   local branch
   branch=$(python3 -c "import json;print(json.load(open('$PROVIDER_CONFIG'))['branch'])" 2>/dev/null || echo "main")
 
-  # Sync vault contents to git repo (exclude local-only)
-  rsync -a --delete \
-    --exclude '.git' \
-    "$VAULT_DIR/identity/" "$REPO_DIR/identity/" 2>/dev/null; mkdir -p "$REPO_DIR/identity"
-  rsync -a --delete "$VAULT_DIR/knowledge/" "$REPO_DIR/knowledge/" 2>/dev/null; mkdir -p "$REPO_DIR/knowledge"
+  local hostname_str
+  hostname_str=$(hostname -s 2>/dev/null || echo "unknown")
+
+  # Fetch latest from remote, reset to it (clean slate)
+  _git fetch origin "$branch" --quiet 2>/dev/null || true
+  _git reset --hard "origin/$branch" --quiet 2>/dev/null || true
+
+  # Apply current vault contents on top
+  mkdir -p "$REPO_DIR/identity" "$REPO_DIR/knowledge"
+  rsync -a --delete --exclude '.git' "$VAULT_DIR/identity/" "$REPO_DIR/identity/" 2>/dev/null || true
+  rsync -a --delete "$VAULT_DIR/knowledge/" "$REPO_DIR/knowledge/" 2>/dev/null || true
   [[ -f "$VAULT_DIR/requirements.yaml" ]] && cp "$VAULT_DIR/requirements.yaml" "$REPO_DIR/"
   [[ -f "$VAULT_DIR/manifest.json" ]] && cp "$VAULT_DIR/manifest.json" "$REPO_DIR/"
 
-  # Auto-commit
+  # Commit and push
   _git add -A
   if _git diff --cached --quiet 2>/dev/null; then
     log "No changes to push"
     return 0
   fi
 
-  local hostname_str
-  hostname_str=$(hostname -s 2>/dev/null || echo "unknown")
   _git commit -m "vault sync $(timestamp) from $hostname_str" --quiet
-
-  # Push
-  _git push origin "$branch" --quiet 2>/dev/null && log "✓ Pushed to git" || {
-    _git push origin "$branch" --force-with-lease --quiet 2>/dev/null && log "✓ Force-pushed to git" || log "⚠ Push failed"
-  }
+  _git push origin "$branch" --quiet 2>/dev/null && log "✓ Pushed to git" || log "⚠ Push failed"
 }
 
 cmd_pull() {
