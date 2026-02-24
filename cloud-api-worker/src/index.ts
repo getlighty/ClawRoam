@@ -20,7 +20,7 @@ app.use("*", async (c, next) => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-ClawRoam-Signature, X-ClawRoam-Hash, X-ClawRoam-Timestamp",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-ClawRoam-Signature, X-ClawRoam-Hash, X-ClawRoam-Timestamp, X-ClawRoam-Manifest",
         "Access-Control-Max-Age": "86400",
       },
     });
@@ -346,7 +346,7 @@ app.put("/v1/vaults/:id/profiles/:profile/sync", async (c) => {
   const versionId = crypto.randomUUID();
   const s3Key = `vaults/${vaultId}/profiles/${profileName}/${versionId}.tar.gz`;
   await c.env.STORAGE.put(s3Key, body, { httpMetadata: { contentType: "application/gzip" } });
-  await c.env.DB.prepare("INSERT INTO vault_versions (id, vault_id, s3_key, size_bytes, hash_sha256, pushed_by, profile_name) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(versionId, vaultId, s3Key, body.byteLength, actualHash, a.fingerprint, profileName).run();
+  await c.env.DB.prepare("INSERT INTO vault_versions (id, vault_id, s3_key, size_bytes, hash_sha256, pushed_by, profile_name, manifest) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(versionId, vaultId, s3Key, body.byteLength, actualHash, a.fingerprint, profileName, null).run();
   const old = await c.env.DB.prepare("SELECT id, s3_key FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?").bind(vaultId, profileName, MAX_VERSIONS).all<{ id: string; s3_key: string }>();
   for (const v of old.results) { await c.env.STORAGE.delete(v.s3_key); await c.env.DB.prepare("DELETE FROM vault_versions WHERE id = ?").bind(v.id).run(); }
   return c.json({ status: "ok", version_id: versionId, profile: profileName, size_bytes: body.byteLength }, 201);
@@ -389,16 +389,29 @@ app.get("/v1/vaults/:id/profiles/:profile/files", async (c) => {
   const profileName = c.req.param("profile");
   const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `list-files:${vaultId}:${profileName}`);
   if (!a.ok) return c.json({ error: a.error }, 401);
-  const latest = await c.env.DB.prepare("SELECT s3_key FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT 1").bind(vaultId, profileName).first<{ s3_key: string }>();
+  const latest = await c.env.DB.prepare("SELECT s3_key, manifest FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT 1").bind(vaultId, profileName).first<{ s3_key: string; manifest: string | null }>();
   if (!latest) return c.json({ error: "No data for profile" }, 404);
+  // Use stored manifest when available (works even for AES-encrypted archives)
+  if (latest.manifest) {
+    const entries = JSON.parse(latest.manifest) as Array<{ path: string; size: number }>;
+    const files = entries
+      .filter((e) => !e.path.startsWith(".git") && e.path !== ".gitignore" && !e.path.startsWith("sync.log"))
+      .map((e) => ({ path: e.path, size: e.size, category: categorizeFile(e.path) }));
+    return c.json({ profile: profileName, files });
+  }
+  // Fallback: decompress archive (only works for unencrypted archives)
   const obj = await c.env.STORAGE.get(latest.s3_key);
   if (!obj) return c.json({ error: "Archive not found" }, 404);
-  const tarData = await decompressGzip(await obj.arrayBuffer());
-  const entries = parseTar(tarData);
-  const files = entries
-    .filter((e) => !e.name.startsWith(".git/") && !e.name.startsWith(".git") && e.name !== ".gitignore" && !e.name.startsWith("sync.log"))
-    .map((e) => ({ path: e.name, size: e.size, category: categorizeFile(e.name) }));
-  return c.json({ profile: profileName, files });
+  try {
+    const tarData = await decompressGzip(await obj.arrayBuffer());
+    const entries = parseTar(tarData);
+    const files = entries
+      .filter((e) => !e.name.startsWith(".git/") && !e.name.startsWith(".git") && e.name !== ".gitignore" && !e.name.startsWith("sync.log"))
+      .map((e) => ({ path: e.name, size: e.size, category: categorizeFile(e.name) }));
+    return c.json({ profile: profileName, files });
+  } catch {
+    return c.json({ error: "Archive is encrypted — push from client to generate file listing." }, 422);
+  }
 });
 
 // ─── Profile file read ───────────────────────────────────────
@@ -489,6 +502,25 @@ app.delete("/v1/vaults/:id/keys/:fp", async (c) => {
   const res = await c.env.DB.prepare("UPDATE vault_keys SET revoked_at = datetime('now') WHERE vault_id = ? AND fingerprint = ? AND revoked_at IS NULL").bind(vaultId, fp).run();
   if (!res.meta.changes) return c.json({ error: "Key not found" }, 404);
   return c.json({ status: "revoked", fingerprint: fp });
+});
+
+// ─── Profile manifest (file listing for dashboard) ───────────
+
+app.put("/v1/vaults/:id/profiles/:profile/manifest", async (c) => {
+  const vaultId = c.req.param("id");
+  const profileName = c.req.param("profile");
+  const ts = c.req.header("X-ClawRoam-Timestamp") || "";
+  const a = await auth(c.env.DB, c.env.JWT_SECRET, vaultId, c.req, `manifest:${vaultId}:${profileName}:${ts}`);
+  if (!a.ok) return c.json({ error: a.error }, 401);
+  const body = await c.req.json<{ files: Array<{ path: string; size: number }> }>();
+  if (!Array.isArray(body.files)) return c.json({ error: "files must be an array" }, 400);
+  const manifestJson = JSON.stringify(body.files);
+  const latest = await c.env.DB.prepare(
+    "SELECT id FROM vault_versions WHERE vault_id = ? AND profile_name = ? ORDER BY created_at DESC LIMIT 1"
+  ).bind(vaultId, profileName).first<{ id: string }>();
+  if (!latest) return c.json({ error: "No version found for this profile" }, 404);
+  await c.env.DB.prepare("UPDATE vault_versions SET manifest = ? WHERE id = ?").bind(manifestJson, latest.id).run();
+  return c.json({ status: "ok", file_count: body.files.length });
 });
 
 // ─── Sync rules — get ────────────────────────────────────────

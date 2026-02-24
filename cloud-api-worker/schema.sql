@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS vault_versions (
   hash_sha256 TEXT NOT NULL,
   pushed_by TEXT NOT NULL DEFAULT '',
   profile_name TEXT NOT NULL DEFAULT 'default',
+  manifest TEXT DEFAULT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

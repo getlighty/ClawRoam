@@ -197,13 +197,32 @@ cmd_push() {
     '--exclude' '.heartbeat.pid'
     '--exclude' '.git-local/'
   )
-  for rule in "${excluded_paths[@]}"; do
+  for rule in "${excluded_paths[@]+"${excluded_paths[@]}"}"; do
     rsync_excludes+=('--exclude' "$rule")
   done
   rsync -a --delete "${rsync_excludes[@]}" "$VAULT_DIR/" "$sync_dir/"
 
   # Create archive
   tar -czf "$archive" -C "$sync_dir" . 2>/dev/null
+
+  # Generate file manifest (paths + sizes) before encrypting
+  # Sent to server after upload so dashboard can list files without decrypting
+  local manifest_json=""
+  manifest_json=$(find "$sync_dir" -type f | sort | python3 -c "
+import sys, os, json
+sync_dir = sys.argv[1]
+files = []
+for line in sys.stdin:
+    path = line.rstrip()
+    rel = path[len(sync_dir):].lstrip('/')
+    if rel.startswith('.git') or rel == '.gitignore' or rel.startswith('sync.log'):
+        continue
+    try:
+        files.append({'path': rel, 'size': os.path.getsize(path)})
+    except Exception:
+        pass
+print(json.dumps(files))
+" "$sync_dir" 2>/dev/null || echo "")
 
   # Encrypt archive with AES-256-CBC using private key as passphrase
   local encrypted="${archive}.enc"
@@ -228,7 +247,7 @@ cmd_push() {
   local signature
   signature=$(sign_request "$archive_hash" 2>/dev/null || echo "unsigned")
 
-  # Upload
+  # Upload encrypted archive
   local http_code
   http_code=$($CURL -sf -o /dev/null -w "%{http_code}" \
     -X PUT "$API_BASE/vaults/$vault_id/profiles/$profile_name/sync" \
@@ -241,6 +260,18 @@ cmd_push() {
 
   if [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
     log "✓ Pushed to cloud ($size_mb MB)"
+    # Upload file manifest so dashboard can list files without decrypting the archive
+    if [[ -n "$manifest_json" ]]; then
+      local ts_m sig_m
+      ts_m=$(date +%s)
+      sig_m=$(sign_request "manifest:${vault_id}:${profile_name}:${ts_m}" 2>/dev/null || echo "unsigned")
+      $CURL -sf -o /dev/null \
+        -X PUT "$API_BASE/vaults/$vault_id/profiles/$profile_name/manifest" \
+        -H "X-ClawRoam-Signature: $sig_m" \
+        -H "X-ClawRoam-Timestamp: $ts_m" \
+        -H "Content-Type: application/json" \
+        --data-raw "{\"files\":$manifest_json}" 2>/dev/null || true
+    fi
   elif [[ "$http_code" == "000" ]]; then
     log "Cloud API not available — falling back to local staging"
     log "Changes will push when connectivity is restored"
