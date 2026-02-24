@@ -427,7 +427,12 @@ app.get("/v1/vaults/:id/profiles/:profile/file/*", async (c) => {
   if (!latest) return c.json({ error: "No data" }, 404);
   const obj = await c.env.STORAGE.get(latest.s3_key);
   if (!obj) return c.json({ error: "Archive not found" }, 404);
-  const entries = parseTar(await decompressGzip(await obj.arrayBuffer()));
+  let entries;
+  try {
+    entries = parseTar(await decompressGzip(await obj.arrayBuffer()));
+  } catch {
+    return c.json({ error: "Archive is encrypted — file preview not available. Push from the client to enable previews." }, 422);
+  }
   const entry = entries.find((e) => e.name === filepath || e.name === "./" + filepath);
   if (!entry) return c.json({ error: "File not found" }, 404);
   return c.json({ path: filepath, content: new TextDecoder().decode(entry.data), size: entry.size });

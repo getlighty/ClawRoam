@@ -1067,9 +1067,16 @@ function openFileModal(profileName, file) {
     })
     .catch(function(err) {
       clearChildren(bodyEl);
+      var isEncrypted = err.message && err.message.indexOf('encrypted') !== -1;
       bodyEl.appendChild(
         el('div', { className: 'empty-state', style: { padding: '2rem' } }, [
-          el('p', { textContent: err.message, style: { color: 'var(--red)' } })
+          el('div', { textContent: isEncrypted ? '🔒' : '⚠️', style: { fontSize: '2rem', marginBottom: '0.75rem' } }),
+          el('p', {
+            textContent: isEncrypted
+              ? 'File preview is not available — the vault archive is encrypted at rest. Only the metadata (file paths and sizes) is stored server-side.'
+              : err.message,
+            style: { color: isEncrypted ? 'var(--text-muted)' : 'var(--red)', maxWidth: '380px', lineHeight: '1.6' }
+          })
         ])
       );
     });
