@@ -16,12 +16,14 @@ You have a work laptop, a home machine, maybe a server. Each runs OpenClaw. You 
 - **Sync is invisible** — changes auto-detect, auto-commit, auto-push
 - **History is versioned** — every change is a git commit, rollback anytime
 - **Storage is your choice** — Google Drive, Dropbox, Git, FTP, S3, or our managed cloud
+- **Encrypted at rest** — vault archives are AES-256-CBC encrypted before upload (ClawRoam Cloud)
+- **Per-profile exclusions** — choose which files sync via the web dashboard
 
 ## Quick start
 
 ```bash
 # Install the skill
-clawdhub install getlighty-clawroam
+clawhub install clawroam
 
 # Initialize (scans packages, generates keypair, captures knowledge)
 clawroam init
@@ -46,7 +48,7 @@ clawroam sync start
 ```bash
 # Install OpenClaw + skill
 npm install -g openclaw
-clawdhub install getlighty-clawroam
+clawhub install clawroam
 
 # Connect to your vault
 clawroam init
@@ -114,6 +116,8 @@ The skill is 100% free and open source (MIT). **ClawRoam Cloud** is the optional
 
 Most single-user vaults are 10-30 MB — comfortably free. A power user at 200 MB pays ~$0.75/month.
 
+The **web dashboard** (available after signing up) lets you browse files across all your machines, manage per-profile sync rules, and copy files between profiles — all from a browser.
+
 ## Commands
 
 | Command | What it does |
@@ -140,6 +144,7 @@ Most single-user vaults are 10-30 MB — comfortably free. A power user at 200 M
 ## Security
 
 - **Ed25519 keypair** per machine — private key never leaves the device (stored with 600 permissions)
+- **Encrypted at rest** — vault archives are AES-256-CBC encrypted on the client before upload; the server stores only ciphertext
 - **Credentials in system keychain** — macOS Keychain or libsecret on Linux, never plaintext
 - **Signed pushes** — every sync is signed with your private key
 - **SOUL.md and IDENTITY.md never auto-sync** — explicit opt-in only
@@ -168,7 +173,8 @@ clawroam/
 │   ├── webdav.sh           # WebDAV (via rclone)
 │   └── local.sh            # Local directory
 ├── web/
-│   └── index.html          # Landing page
+│   ├── index.html          # Landing page
+│   └── dashboard.html      # ClawRoam Cloud dashboard (file browser, sync rules)
 ├── LICENSE                  # MIT
 └── README.md
 ```
